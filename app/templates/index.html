@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrácia na letný rodinný tábor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <h1>Registrácia na letný rodinný tábor</h1>
+    <form id="registrationForm" action="/submit" method="POST">
+        <div class="form-group">
+            <label for="name">Meno:</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+        <div class="form-group">
+            <label for="age">Vek:</label>
+            <input type="number" id="age" name="age" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required>
+        </div>
+        <div class="form-group">
+            <label for="telephone">Telefón:</label>
+            <input type="tel" id="telephone" name="telephone" required>
+        </div>
+
+        <h3>Členovia domácnosti</h3>
+        <div id="householdMembers">
+            <div class="member">
+                <label for="memberName1">Meno:</label>
+                <input type="text" name="memberName[]" id="memberName1" required>
+                <label for="memberAge1">Vek:</label>
+                <input type="number" name="memberAge[]" id="memberAge1" required>
+            </div>
+            <div class="member">
+                <label for="memberName2">Meno:</label>
+                <input type="text" name="memberName[]" id="memberName2" required>
+                <label for="memberAge2">Vek:</label>
+                <input type="number" name="memberAge[]" id="memberAge2" required>
+            </div>
+            <div class="member">
+                <label for="memberName3">Meno:</label>
+                <input type="text" name="memberName[]" id="memberName3" required>
+                <label for="memberAge3">Vek:</label>
+                <input type="number" name="memberAge[]" id="memberAge3" required>
+            </div>
+            <div class="member">
+                <label for="memberName4">Meno:</label>
+                <input type="text" name="memberName[]" id="memberName4" required>
+                <label for="memberAge4">Vek:</label>
+                <input type="number" name="memberAge[]" id="memberAge4" required>
+            </div>
+            <div class="member">
+                <label for="memberName5">Meno:</label>
+                <input type="text" name="memberName[]" id="memberName5" required>
+                <label for="memberAge5">Vek:</label>
+                <input type="number" name="memberAge[]" id="memberAge5" required>
+            </div>
+        </div>
+
+        <button type="submit">Odoslať</button>
+    </form>
+    <script src="/static/js/validation.js"></script>
+</body>
+</html>
