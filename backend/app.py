@@ -96,6 +96,21 @@ async def register(
     return {"message": "Registration successful!"}
 
 
+@app.get("/liveness/", status_code=200)
+def liveness_check():
+    return "Liveness check succeeded."
+
+
+@app.get("/readiness/", status_code=200)
+def readiness_check():
+    return "Readiness check succeeded."
+
+
+@app.get("/startup/", status_code=200)
+def startup_check():
+    return "Startup check succeeded."
+
+
 # if __name__ == "__main__":
 # import uvicorn
 
