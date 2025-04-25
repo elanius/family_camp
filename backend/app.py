@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Annotated, List, Optional
 from pymongo import MongoClient
-from dotenv import load_dotenv
 import os
 
 
@@ -23,9 +22,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Get MongoDB connection string from environment variables
 MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING", "mongodb://localhost:27017/")
