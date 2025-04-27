@@ -11,7 +11,7 @@ document.querySelectorAll('input[name="attendance"]').forEach((radio) => {
 
 document.addEventListener("DOMContentLoaded", () => {
     const form = document.getElementById("registrationForm");
-    const apiUrl = "http://localhost:8000/api/register";
+    const apiUrl = "https://famili-camp-backend-i9qc3.ondigitalocean.app/api/register";
     form.action = apiUrl; // Set the form action dynamically
     form.addEventListener("submit", handleFormSubmit);
 });
