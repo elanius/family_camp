@@ -1,3 +1,4 @@
+import datetime
 from fastapi import FastAPI, Form, Request
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,9 +45,12 @@ class Registration(BaseModel):
     email: str
     phone: str
     attendance: str
+    registration_time: datetime = datetime.datetime.now()
     days: Optional[List[int]] = None
     family_members: Optional[List[FamilyMember]] = None
     note: Optional[str] = None
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 @app.post("/api/register")
