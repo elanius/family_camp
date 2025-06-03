@@ -2,6 +2,7 @@ import datetime
 from fastapi import FastAPI, Form, Request
 
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Annotated, List, Optional
 from pymongo import MongoClient
@@ -98,6 +99,48 @@ async def register(
     registration_collection.insert_one(registration_data)
 
     return {"message": "Registration successful!"}
+
+
+@app.get("/api/attendees", response_class=HTMLResponse)
+async def attendees_list():
+    """
+    Get the list of all attendees as an HTML table.
+    """
+    registrations_cursor = registration_collection.find()
+    attendees = [Registration.model_validate(attendee) for attendee in registrations_cursor]
+
+    html = "<table border='1'>\n"
+    html += "<tr><th>ID</th><th>Name</th><th>Age</th><th>Email</th><th>Phone</th><th>Attendance</th><th>Days</th><th>Note</th></tr>\n"
+
+    attendee_id = 1
+    for i, attendee in enumerate(attendees):
+        row_class = " style='background-color:#e8f3ff;'" if i % 2 == 1 else ""
+        html += (
+            f"<tr{row_class}>"
+            f"<td>{attendee_id}</td>"
+            f"<td>{attendee.first_name} {attendee.last_name}</td>"
+            f"<td>{attendee.age}</td>"
+            f"<td>{attendee.email}</td>"
+            f"<td>{attendee.phone}</td>"
+            f"<td>{attendee.attendance}</td>"
+            f"<td>{', '.join(map(str, attendee.days)) if attendee.days else ''}</td>"
+            f"<td>{attendee.note if attendee.note else ''}</td>"
+            "</tr>\n"
+        )
+        attendee_id += 1
+        for member in attendee.family_members or []:
+            html += (
+                f"<tr{row_class}>"
+                f"<td>{attendee_id}</td>"
+                f"<td>{member.name}</td>"
+                f"<td>{member.age}</td>"
+                "<td /><td /><td /><td /><td />"
+                "</tr>\n"
+            )
+            attendee_id += 1
+
+    html += "</table>\n"
+    return html
 
 
 @app.get("/liveness/", status_code=200)
