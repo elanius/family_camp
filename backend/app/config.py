@@ -11,15 +11,17 @@ class Settings(BaseSettings):
 
     # MongoDB
     mongodb_uri: str = "mongodb://localhost:27017"
-    mongodb_db: str = "family_camp"
+    mongodb_db: str = "kids-camp-2026"
 
-    # Gmail SMTP
+    # Gmail OAuth2
     gmail_user: str = ""
-    gmail_app_password: str = ""
+    gmail_client_id: str = ""
+    gmail_client_secret: str = ""
+    gmail_refresh_token: str = ""
 
     # Email content
     notification_from: str = ""
-    notification_subject: str = "Rodinný tábor – registrujeme váš zájem"
+    notification_subject: str = ""
 
 
 @lru_cache
