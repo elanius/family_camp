@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api", tags=["registration"])
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register_email(payload: EmailRegistration) -> dict:
     db = get_db()
-    collection = db["registrations"]
+    collection = db["preregistration"]
 
     # Prevent duplicates
     existing = await collection.find_one({"email": payload.email})
