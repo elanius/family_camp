@@ -69,10 +69,12 @@ export default function CampInfo() {
           isOpen={openCard === 3}
           onToggle={() => toggle(3)}
         >
-          <p>
-            Ponúkame zľavu pre súrodencov - zľava 20€ pre dvoch, zľava 40€ pre
-            troch.
-          </p>
+          <p>Deti do 3 rokov zdarma.</p>
+          <p>Súrodenecká zľava:</p>
+          <ul>
+            <li>2 deti: 240 € (zľava 20 €)</li>
+            <li>3 deti: 350 € (zľava 40 €)</li>
+          </ul>
         </Card>
         <Card
           icon="🍽️"
