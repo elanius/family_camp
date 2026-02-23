@@ -16,38 +16,44 @@ logger = logging.getLogger(__name__)
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 
-def _build_message(sender: str, to_email: str, subject: str) -> MIMEMultipart:
+def _build_message(sender: str, to_email: str) -> MIMEMultipart:
     message = MIMEMultipart("alternative")
-    message["Subject"] = subject
+    message["Subject"] = "Detský biblický tábor – registrujeme váš záujem"
     message["From"] = sender
     message["To"] = to_email
 
     text_body = f"""\
 Ahoj!
 
-Děkujeme za váš zájem o Rodinný tábor.
-Váš e-mail ({to_email}) jsme si zaznamenali.
+Ďakujeme za váš záujem o detský biblický tábor.
+Vašu e-mailovú adresu ({to_email}) sme si zaznamenali.
 
-Jakmile spustíme registrace, dáme vám vědět jako prvním.
+Keď spustíme registráciu, budeme vás medzi prvými informovať.
 
-Tým Rodinného tábora
+Za prípravný tím
+S. Alexovič
 """
 
     html_body = f"""\
 <html>
-  <body style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto;">
-    <h2 style="color: #4a7c59;">Rodinný tábor</h2>
-    <p>Ahoj!</p>
-    <p>
-      Děkujeme za váš zájem. Váš e-mail
-      <strong>{to_email}</strong> jsme si zaznamenali.
-    </p>
-    <p>
-      Jakmile spustíme registrace, dáme vám vědět jako prvním.
-    </p>
-    <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
-      Tým Rodinného tábora
-    </p>
+  <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
+    <div style="max-width: 600px;">
+      <p>Ahoj!</p>
+
+      <p>
+        Ďakujeme za váš záujem o detský biblický tábor.
+        Vašu e-mailovú adresu <strong>{to_email}</strong> sme si zaznamenali.
+      </p>
+
+      <p>
+        Keď spustíme registráciu, budeme vás medzi prvými informovať.
+      </p>
+
+      <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
+        Za prípravný tím<br>
+        S. Alexovič
+      </p>
+    </div>
   </body>
 </html>
 """
@@ -71,8 +77,7 @@ def _send_via_gmail_api(to_email: str) -> None:
     )
     creds.refresh(Request())
 
-    sender = settings.notification_from or settings.gmail_user
-    mime_message = _build_message(sender, to_email, settings.notification_subject)
+    mime_message = _build_message(settings.gmail_user, to_email)
     raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
 
     service = build("gmail", "v1", credentials=creds)

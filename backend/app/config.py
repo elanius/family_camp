@@ -19,10 +19,6 @@ class Settings(BaseSettings):
     gmail_client_secret: str = ""
     gmail_refresh_token: str = ""
 
-    # Email content
-    notification_from: str = ""
-    notification_subject: str = ""
-
 
 @lru_cache
 def get_settings() -> Settings:
