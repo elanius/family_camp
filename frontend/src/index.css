@@ -252,6 +252,17 @@ body {
   list-style-position: inside;
 }
 
+.info-card__details-inner a {
+  color: var(--color-forest);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.info-card__details-inner a:hover {
+  color: var(--color-forest-dark);
+}
+
+
 .info-card--open .info-card__details-inner {
   padding: 0.75rem 1.5rem 1.5rem;
 }
