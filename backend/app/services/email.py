@@ -87,12 +87,14 @@ def _send_via_gmail_api(to_email: str) -> None:
 async def send_registration_confirmation(to_email: str) -> None:
     settings = get_settings()
 
-    if not all([
-        settings.gmail_user,
-        settings.gmail_client_id,
-        settings.gmail_client_secret,
-        settings.gmail_refresh_token,
-    ]):
+    if not all(
+        [
+            settings.gmail_user,
+            settings.gmail_client_id,
+            settings.gmail_client_secret,
+            settings.gmail_refresh_token,
+        ]
+    ):
         logger.warning("Gmail OAuth2 credentials not configured – skipping email send.")
         return
 
@@ -105,4 +107,108 @@ async def send_registration_confirmation(to_email: str) -> None:
         raise
     except Exception:
         logger.exception("Failed to send confirmation email to %s", to_email)
+        raise
+
+
+def _build_full_registration_message(
+    sender: str, to_email: str, registrant_name: str, attendee_count: int
+) -> MIMEMultipart:
+    message = MIMEMultipart("alternative")
+    message["Subject"] = "Detský biblický tábor – potvrdenie registrácie"
+    message["From"] = sender
+    message["To"] = to_email
+
+    attendee_word = "účastníkov" if attendee_count != 1 else "účastníka"
+
+    text_body = f"""\
+Ahoj {registrant_name}!
+
+Vaša registrácia na Detský biblický tábor bola úspešne prijatá.
+Prihlásili ste {attendee_count} {attendee_word}.
+
+Čoskoro sa vám ozveme s ďalšími informáciami.
+
+Za prípravný tím
+S. Alexovič
+"""
+
+    html_body = f"""\
+<html>
+  <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
+    <div style="max-width: 600px;">
+      <p>Ahoj <strong>{registrant_name}</strong>!</p>
+
+      <p>
+        Vaša registrácia na <strong>Detský biblický tábor</strong> bola úspešne prijatá.
+        Prihlásili ste <strong>{attendee_count} {attendee_word}</strong>.
+      </p>
+
+      <p>
+        Čoskoro sa vám ozveme s ďalšími informáciami o platbe a programe.
+      </p>
+
+      <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
+        Za prípravný tím<br>
+        S. Alexovič
+      </p>
+    </div>
+  </body>
+</html>
+"""
+
+    message.attach(MIMEText(text_body, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
+    return message
+
+
+def _send_full_registration_via_gmail(to_email: str, registrant_name: str, attendee_count: int) -> None:
+    """Synchronous Gmail API call – intended to be run in a thread executor."""
+    settings = get_settings()
+
+    creds = Credentials(
+        token=None,
+        refresh_token=settings.gmail_refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=settings.gmail_client_id,
+        client_secret=settings.gmail_client_secret,
+        scopes=GMAIL_SCOPES,
+    )
+    creds.refresh(Request())
+
+    mime_message = _build_full_registration_message(settings.gmail_user, to_email, registrant_name, attendee_count)
+    raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
+
+    service = build("gmail", "v1", credentials=creds)
+    service.users().messages().send(userId="me", body={"raw": raw}).execute()
+
+
+async def send_full_registration_confirmation(to_email: str, registrant_name: str, attendee_count: int) -> None:
+    settings = get_settings()
+
+    if not all(
+        [
+            settings.gmail_user,
+            settings.gmail_client_id,
+            settings.gmail_client_secret,
+            settings.gmail_refresh_token,
+        ]
+    ):
+        logger.warning("Gmail OAuth2 credentials not configured – skipping email send.")
+        return
+
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            _send_full_registration_via_gmail,
+            to_email,
+            registrant_name,
+            attendee_count,
+        )
+        logger.info("Full registration confirmation email sent to %s", to_email)
+    except HttpError as exc:
+        logger.exception("Gmail API error sending to %s: %s", to_email, exc)
+        raise
+    except Exception:
+        logger.exception("Failed to send full registration email to %s", to_email)
         raise

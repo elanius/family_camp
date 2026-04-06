@@ -19,5 +19,7 @@ backend/.venv
 # VS code
 .vscode/
 
+test-results/
+
 # uv
 uv.lock

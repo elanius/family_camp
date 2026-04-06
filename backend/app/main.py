@@ -1,5 +1,4 @@
 import logging
-
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -7,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import close_db
-from app.routers import register
+from app.routers import register, registration
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(register.router)
+app.include_router(registration.router)
 
 
 @app.get("/liveness/", status_code=200)
