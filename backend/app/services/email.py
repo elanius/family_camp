@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import logging
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -295,35 +296,46 @@ def _build_payment_info_message(
     sender: str,
     to_email: str,
     registrant_name: str,
-    attendee_count: int,
+    iban: str,
+    bank_name: str,
+    amount: int,
+    variable_symbol: str,
+    recipient_note: str,
+    qr_png_bytes: bytes | None = None,
 ) -> MIMEMultipart:
-    message = MIMEMultipart("alternative")
-    message["Subject"] = "Detský biblický tábor – informácie o platbe"
-    message["From"] = sender
-    message["To"] = to_email
+    outer = MIMEMultipart("related")
+    outer["Subject"] = "Detský biblický tábor – informácie o platbe"
+    outer["From"] = sender
+    outer["To"] = to_email
 
-    attendee_word = "účastníkov" if attendee_count != 1 else "účastníka"
+    alt = MIMEMultipart("alternative")
+    outer.attach(alt)
 
-    # TODO: Fill in your bank details below before going to production.
-    bank_iban = "SK00 0000 0000 0000 0000 0000"  # TODO: set real IBAN
-    bank_name = "Názov banky"  # TODO: set real bank name
-    variable_symbol = ""  # TODO: define variable symbol logic (e.g. based on email or ID)
-    payment_deadline = "30. apríla 2026"  # TODO: adjust deadline as needed
-    amount_per_attendee = 0  # TODO: set real amount per attendee in EUR
-    total_amount = amount_per_attendee * attendee_count
+    payment_deadline = "30. apríla 2026"
+
+    qr_block_html = (
+        (
+            '<p style="margin: 1.5rem 0 0.5rem;">'
+            '<img src="cid:qrcode" alt="Pay by Square QR kód" width="200" height="200">'
+            "</p>"
+            '<p style="color: #888; font-size: 0.85rem; margin: 0;">Oskenujte v svojej bankovej aplikácii</p>'
+        )
+        if qr_png_bytes
+        else ""
+    )
 
     text_body = f"""\
 Ahoj {registrant_name}!
 
 Ďakujeme za registráciu na Detský biblický tábor.
-Zaregistrovali ste {attendee_count} {attendee_word}.
 
 Pre dokončenie registrácie prosíme uhradiť registračný poplatok:
 
-  Suma:              {total_amount} EUR
-  IBAN:              {bank_iban}
+  Suma:              {amount} EUR
+  IBAN:              {iban}
   Banka:             {bank_name}
   Variabilný symbol: {variable_symbol}
+  Správa pre príjemcu: {recipient_note}
   Termín platby:     {payment_deadline}
 
 Po prijatí platby vás budeme informovať e-mailom.
@@ -338,21 +350,18 @@ S. Alexovič
     <div style="max-width: 600px;">
       <p>Ahoj <strong>{registrant_name}</strong>!</p>
 
-      <p>
-        Ďakujeme za registráciu na <strong>Detský biblický tábor</strong>.
-        Zaregistrovali ste <strong>{attendee_count} {attendee_word}</strong>.
-      </p>
+      <p>Ďakujeme za registráciu na <strong>Detský biblický tábor</strong>.</p>
 
       <p>Pre dokončenie registrácie prosíme uhradiť registračný poplatok:</p>
 
       <table style="border-collapse: collapse; margin: 1rem 0;">
         <tr>
           <td style="padding: 4px 16px 4px 0; color: #666;">Suma:</td>
-          <td style="padding: 4px 0;"><strong>{total_amount} EUR</strong></td>
+          <td style="padding: 4px 0;"><strong>{amount} EUR</strong></td>
         </tr>
         <tr>
           <td style="padding: 4px 16px 4px 0; color: #666;">IBAN:</td>
-          <td style="padding: 4px 0;"><strong>{bank_iban}</strong></td>
+          <td style="padding: 4px 0; font-family: monospace;"><strong>{iban}</strong></td>
         </tr>
         <tr>
           <td style="padding: 4px 16px 4px 0; color: #666;">Banka:</td>
@@ -363,12 +372,18 @@ S. Alexovič
           <td style="padding: 4px 0;"><strong>{variable_symbol}</strong></td>
         </tr>
         <tr>
+          <td style="padding: 4px 16px 4px 0; color: #666;">Správa pre príjemcu:</td>
+          <td style="padding: 4px 0;">{recipient_note}</td>
+        </tr>
+        <tr>
           <td style="padding: 4px 16px 4px 0; color: #666;">Termín platby:</td>
           <td style="padding: 4px 0;">{payment_deadline}</td>
         </tr>
       </table>
 
-      <p>Po prijatí platby vás budeme informovať e-mailom.</p>
+      {qr_block_html}
+
+      <p style="margin-top: 1.5rem;">Po prijatí platby vás budeme informovať e-mailom.</p>
 
       <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
         Za prípravný tím<br>
@@ -379,15 +394,27 @@ S. Alexovič
 </html>
 """
 
-    message.attach(MIMEText(text_body, "plain", "utf-8"))
-    message.attach(MIMEText(html_body, "html", "utf-8"))
-    return message
+    alt.attach(MIMEText(text_body, "plain", "utf-8"))
+    alt.attach(MIMEText(html_body, "html", "utf-8"))
+
+    if qr_png_bytes:
+        img = MIMEImage(qr_png_bytes, _subtype="png")
+        img.add_header("Content-ID", "<qrcode>")
+        img.add_header("Content-Disposition", "inline", filename="platba.png")
+        outer.attach(img)
+
+    return outer
 
 
 def _send_payment_info_via_gmail(
     to_email: str,
     registrant_name: str,
-    attendee_count: int,
+    iban: str,
+    bank_name: str,
+    amount: int,
+    variable_symbol: str,
+    recipient_note: str,
+    qr_png_bytes: bytes | None,
 ) -> None:
     settings = get_settings()
 
@@ -401,7 +428,17 @@ def _send_payment_info_via_gmail(
     )
     creds.refresh(Request())
 
-    mime_message = _build_payment_info_message(settings.gmail_user, to_email, registrant_name, attendee_count)
+    mime_message = _build_payment_info_message(
+        settings.gmail_user,
+        to_email,
+        registrant_name,
+        iban,
+        bank_name,
+        amount,
+        variable_symbol,
+        recipient_note,
+        qr_png_bytes,
+    )
     raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
 
     service = build("gmail", "v1", credentials=creds)
@@ -411,19 +448,24 @@ def _send_payment_info_via_gmail(
 async def send_payment_info_email(
     to_email: str,
     registrant_name: str,
-    attendee_count: int,
+    iban: str = "",
+    bank_name: str = "",
+    amount: int = 0,
+    variable_symbol: str = "",
+    recipient_note: str = "",
+    qr_png_bytes: bytes | None = None,
+    attendee_count: int = 0,  # kept for backward compat, unused
 ) -> None:
     settings = get_settings()
 
+    if not settings.email_enabled:
+        logger.info("[email] EMAIL_ENABLED=false – skipping payment info email to %s", to_email)
+        return
+
     if not all(
-        [
-            settings.gmail_user,
-            settings.gmail_client_id,
-            settings.gmail_client_secret,
-            settings.gmail_refresh_token,
-        ]
+        [settings.gmail_user, settings.gmail_client_id, settings.gmail_client_secret, settings.gmail_refresh_token]
     ):
-        logger.warning("Gmail OAuth2 credentials not configured – skipping payment info email.")
+        logger.warning("[email] Gmail OAuth2 credentials not configured – skipping payment info email.")
         return
 
     try:
@@ -433,12 +475,17 @@ async def send_payment_info_email(
             _send_payment_info_via_gmail,
             to_email,
             registrant_name,
-            attendee_count,
+            iban,
+            bank_name,
+            amount,
+            variable_symbol,
+            recipient_note,
+            qr_png_bytes,
         )
-        logger.info("Payment info email sent to %s", to_email)
+        logger.info("[email] Payment info email sent to %s", to_email)
     except HttpError as exc:
-        logger.exception("Gmail API error sending payment info to %s: %s", to_email, exc)
+        logger.exception("[email] Gmail API error sending payment info to %s: %s", to_email, exc)
         raise
     except Exception:
-        logger.exception("Failed to send payment info email to %s", to_email)
+        logger.exception("[email] Failed to send payment info email to %s", to_email)
         raise

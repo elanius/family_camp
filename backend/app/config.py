@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     gmail_client_secret: str = ""
     gmail_refresh_token: str = ""
 
+    # Bank (payment info)
+    bank_iban: str = ""
+    bank_name: str = ""
+    bank_beneficiary: str = ""
+
     # JWT (admin auth)
     jwt_secret: str
     jwt_algorithm: str = "HS256"

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { calculatePrice, CATEGORY_LABEL } from "../../utils/pricing";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -90,6 +91,7 @@ interface RegistrationRowProps {
 }
 
 function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: RegistrationRowProps) {
+  const navigate = useNavigate();
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,6 +113,11 @@ function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: Registra
   const pricing = calculatePrice(campers);
 
   async function handleAction(action: Action) {
+    if (action === "send_payment_info") {
+      navigate(`/admin/payment/${item.id}`);
+      return;
+    }
+
     if (
       action === "reject" &&
       !window.confirm(`Reject registration for ${item.registrant.name} ${item.registrant.surname}?`)

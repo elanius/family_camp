@@ -119,6 +119,39 @@ class AdminRegistrationItem(BaseModel):
     status: RegistrationStatus
     registered_at: datetime
     update_token: str = ""
+    variable_symbol: Optional[str] = None
+
+
+class PaymentInfoResponse(BaseModel):
+    iban: str
+    bank_name: str
+    amount: int
+    variable_symbol: str
+    recipient_note: str
+    registrant_name: str
+    registrant_email: str
+    attendee_count: int
+    qr_string: str
+
+
+class SendPaymentInfoRequest(BaseModel):
+    iban: str
+    bank_name: str
+    amount: int
+    variable_symbol: str
+    recipient_note: str
+    bysquare_string: str
+
+
+class QrStringRequest(BaseModel):
+    iban: str
+    amount: int
+    variable_symbol: str
+    note: str
+
+
+class QrStringResponse(BaseModel):
+    qr_string: str
 
 
 class TokenResponse(BaseModel):
