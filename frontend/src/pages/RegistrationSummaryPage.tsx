@@ -25,6 +25,7 @@ interface RegistrationPayload {
   registration_type: RegistrationType;
   registrant: RegistrantPayload;
   attendees: AttendeePayload[];
+  note?: string;
 }
 
 interface LocationState {
@@ -32,7 +33,7 @@ interface LocationState {
   payload: RegistrationPayload;
 }
 
-type Status = "idle" | "loading" | "error" | "success";
+type Status = "idle" | "loading" | "error" | "duplicate" | "success";
 
 export default function RegistrationSummaryPage() {
   const location = useLocation();
@@ -69,6 +70,8 @@ export default function RegistrationSummaryPage() {
 
       if (res.status === 201) {
         setStatus("success");
+      } else if (res.status === 409) {
+        setStatus("duplicate");
       } else {
         setStatus("error");
       }
@@ -168,6 +171,16 @@ export default function RegistrationSummaryPage() {
           </section>
         )}
 
+        {/* ── Note ──────────────────────────────────────── */}
+        {payload.note && (
+          <section className="summary-section">
+            <h2 className="summary-section__title">Poznámka</h2>
+            <div className="summary-card">
+              <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{payload.note}</p>
+            </div>
+          </section>
+        )}
+
         {/* ── Price breakdown ─────────────────────────── */}
         <div className="price-preview price-preview--final">
           <h2 className="price-preview__title">Cena</h2>
@@ -201,6 +214,12 @@ export default function RegistrationSummaryPage() {
         {/* ── Actions ─────────────────────────────────── */}
         {status === "error" && (
           <p className="reg-form__submit-error">❌ Registrácia zlyhala. Skúste to prosím znova.</p>
+        )}
+        {status === "duplicate" && (
+          <p className="reg-form__submit-error">
+            ❌ Tento e-mail je už zaregistrovaný. Pre úpravu registrácie použite odkaz, ktorý ste dostali v
+            potvrdzovacom e-maile.
+          </p>
         )}
 
         <div className="reg-summary__actions">

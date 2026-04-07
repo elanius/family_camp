@@ -27,6 +27,8 @@ interface RegistrationContextValue {
   setRegistrant: (r: RegistrantData) => void;
   attendees: AttendeeData[];
   setAttendees: (a: AttendeeData[]) => void;
+  note: string;
+  setNote: (n: string) => void;
   resetForm: () => void;
 }
 
@@ -36,16 +38,18 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
   const [regType, setRegType] = useState<RegistrationType>("me_and_others");
   const [registrant, setRegistrant] = useState<RegistrantData>(emptyRegistrant);
   const [attendees, setAttendees] = useState<AttendeeData[]>([emptyAttendee()]);
+  const [note, setNote] = useState("");
 
   function resetForm() {
     setRegType("me_and_others");
     setRegistrant(emptyRegistrant());
     setAttendees([emptyAttendee()]);
+    setNote("");
   }
 
   return (
     <RegistrationContext.Provider
-      value={{ regType, setRegType, registrant, setRegistrant, attendees, setAttendees, resetForm }}
+      value={{ regType, setRegType, registrant, setRegistrant, attendees, setAttendees, note, setNote, resetForm }}
     >
       {children}
     </RegistrationContext.Provider>

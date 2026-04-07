@@ -1,7 +1,4 @@
-import { useNavigate } from "react-router-dom";
-
 export default function HeroSection() {
-  const navigate = useNavigate();
   return (
     <section className="hero">
       <span className="hero__eyebrow">ECAV Obišovce · Leto 2026</span>

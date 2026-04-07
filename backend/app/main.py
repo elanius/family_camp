@@ -6,9 +6,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import close_db
-from app.routers import register, registration
+from app.routers import admin, register, registration
 
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("app.services.email").setLevel(logging.DEBUG)
 
 
 @asynccontextmanager
@@ -33,12 +34,13 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_methods=["POST", "GET"],
+    allow_methods=["POST", "GET", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
 app.include_router(register.router)
 app.include_router(registration.router)
+app.include_router(admin.router)
 
 
 @app.get("/liveness/", status_code=200)

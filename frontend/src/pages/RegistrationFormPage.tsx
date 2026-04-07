@@ -4,6 +4,8 @@ import AttendeeForm, { validateAttendee, type AttendeeData, type AttendeeErrors 
 import { calculatePrice, CATEGORY_LABEL } from "../utils/pricing";
 import { useRegistration, type RegistrantData, type RegistrationType } from "../context/RegistrationContext";
 
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+
 interface RegistrantErrors {
   name?: string;
   surname?: string;
@@ -60,10 +62,12 @@ function hasErrors(errors: object): boolean {
 }
 
 export default function RegistrationFormPage() {
-  const { regType, setRegType, registrant, setRegistrant, attendees, setAttendees } = useRegistration();
+  const { regType, setRegType, registrant, setRegistrant, attendees, setAttendees, note, setNote } = useRegistration();
   const [registrantErrors, setRegistrantErrors] = useState<RegistrantErrors>({});
   const [attendeeErrors, setAttendeeErrors] = useState<AttendeeErrors[]>(() => attendees.map(() => ({})));
   const [touched, setTouched] = useState(false);
+  const [isEmailTaken, setIsEmailTaken] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
   const navigate = useNavigate();
   const isMeAndOthers = regType === "me_and_others";
@@ -78,11 +82,13 @@ export default function RegistrationFormPage() {
     setAttendees([emptyAttendee()]);
     setAttendeeErrors([{}]);
     setTouched(false);
+    setIsEmailTaken(false);
   }
 
   function handleRegistrantChange(field: keyof RegistrantData, value: string) {
     const updated = { ...registrant, [field]: value };
     setRegistrant(updated);
+    if (field === "email") setIsEmailTaken(false);
     if (touched) {
       setRegistrantErrors(validateRegistrant(updated, includeAge, isOnlyMe));
     }
@@ -93,6 +99,23 @@ export default function RegistrationFormPage() {
     setAttendees(updated);
     if (touched) {
       setAttendeeErrors(updated.map((a) => validateAttendee(a)));
+    }
+  }
+
+  async function handleEmailBlur() {
+    const email = registrant.email.trim();
+    if (!email || !EMAIL_RE.test(email)) return;
+    setIsCheckingEmail(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/registration/check-email?email=${encodeURIComponent(email)}`);
+      if (res.ok) {
+        const data = (await res.json()) as { exists: boolean };
+        setIsEmailTaken(data.exists);
+      }
+    } catch {
+      // Network failure — let the backend catch it on submit
+    } finally {
+      setIsCheckingEmail(false);
     }
   }
 
@@ -115,7 +138,7 @@ export default function RegistrationFormPage() {
     setRegistrantErrors(rErr);
     setAttendeeErrors(aErrs);
 
-    if (hasErrors(rErr) || (!isOnlyMe && aErrs.some(hasErrors))) return;
+    if (hasErrors(rErr) || isEmailTaken || (!isOnlyMe && aErrs.some(hasErrors))) return;
 
     const ageNum = includeAge ? parseInt(registrant.age, 10) : undefined;
 
@@ -141,6 +164,7 @@ export default function RegistrationFormPage() {
               ...(a.email.trim() && { email: a.email.trim() }),
             };
           }),
+      ...(note.trim() && { note: note.trim() }),
     };
 
     navigate("/registration/summary", { state: { regType, payload } });
@@ -296,13 +320,20 @@ export default function RegistrationFormPage() {
                 <input
                   id="reg-email"
                   type="email"
-                  className={`form-input${registrantErrors.email ? " is-invalid" : ""}`}
+                  className={`form-input${registrantErrors.email || isEmailTaken ? " is-invalid" : ""}`}
                   value={registrant.email}
                   onChange={(e) => handleRegistrantChange("email", e.target.value)}
+                  onBlur={handleEmailBlur}
                   autoComplete="email"
                   placeholder="vas@email.sk"
                 />
                 {registrantErrors.email && <p className="form-error">{registrantErrors.email}</p>}
+                {!registrantErrors.email && isEmailTaken && (
+                  <p className="form-error">
+                    Tento e-mail je už zaregistrovaný. Pre úpravu registrácie použite odkaz, ktorý ste dostali v
+                    potvrdzovacom e-maile.
+                  </p>
+                )}
               </div>
             </div>
           </section>
@@ -333,6 +364,28 @@ export default function RegistrationFormPage() {
               </button>
             </section>
           )}
+
+          {/* ── Note ────────────────────────────────────── */}
+          <section className="reg-form__section">
+            <h2 className="reg-form__section-title">Poznámka</h2>
+            <p className="reg-form__section-note">
+              Sem môžete uviesť dôležité informácie, ktoré potrebujeme vedieť vopred — napríklad lieky, špeciálnu diétu
+              alebo iné zdravotné poznámky.
+            </p>
+            <div className="form-field">
+              <label className="form-label" htmlFor="reg-note">
+                Poznámka
+              </label>
+              <textarea
+                id="reg-note"
+                className="form-input"
+                rows={4}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Napr.: Peter je alergický na orechy, Jana je vegetariánka…"
+              />
+            </div>
+          </section>
 
           {/* ── Price preview ────────────────────────────── */}
           {priceBreakdown && (
@@ -365,7 +418,7 @@ export default function RegistrationFormPage() {
           )}
 
           {/* ── Next ────────────────────────────────────── */}
-          <button type="submit" className="reg-form__submit">
+          <button type="submit" className="reg-form__submit" disabled={isEmailTaken || isCheckingEmail}>
             Ďalej →
           </button>
         </form>

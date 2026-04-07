@@ -1,0 +1,4 @@
+/* Admin-only Tailwind CSS — imported only in admin pages to isolate from global styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -17,6 +17,9 @@ class EmailRegistrationRecord(BaseModel):
 
 PHONE_RE = r"^\+?[0-9\s\-]{9,15}$"
 
+RegistrationStatus = Literal["new", "wait_for_payment", "paid", "accepted", "rejected"]
+RegistrationType = Literal["me_and_others", "just_others", "only_me"]
+
 
 class AttendeeData(BaseModel):
     name: str = Field(min_length=1)
@@ -54,9 +57,19 @@ class RegistrantData(BaseModel):
 
 
 class RegistrationRequest(BaseModel):
-    registration_type: Literal["me_and_others", "just_others"]
+    registration_type: RegistrationType
     registrant: RegistrantData
-    attendees: list[AttendeeData] = Field(min_length=1)
+    attendees: list[AttendeeData] = Field(default_factory=list)
+    note: Optional[str] = None
+
+    @field_validator("attendees")
+    @classmethod
+    def validate_attendees(cls, v: list["AttendeeData"], info: object) -> list["AttendeeData"]:
+        values = getattr(info, "data", {})
+        reg_type = values.get("registration_type")
+        if reg_type != "only_me" and len(v) == 0:
+            raise ValueError("At least one attendee is required.")
+        return v
 
     @field_validator("registrant")
     @classmethod
@@ -69,7 +82,45 @@ class RegistrationRequest(BaseModel):
 
 
 class RegistrationRecord(BaseModel):
-    registration_type: Literal["me_and_others", "just_others"]
+    registration_type: RegistrationType
     registrant: RegistrantData
     attendees: list[AttendeeData]
+    note: Optional[str] = None
     registered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    update_token: str
+    status: RegistrationStatus = "new"
+
+
+class RegistrationTokenResponse(BaseModel):
+    """Read-only data returned by the GET /registration/{token} endpoint."""
+
+    registration_type: RegistrationType
+    registrant: RegistrantData
+    attendees: list[AttendeeData]
+    note: Optional[str] = None
+    is_paid: bool
+    cancelled: bool
+
+
+# ── Admin models ─────────────────────────────────────────────────────────
+
+
+class AdminUser(BaseModel):
+    username: str
+    hashed_password: str
+
+
+class AdminRegistrationItem(BaseModel):
+    id: str
+    registration_type: RegistrationType
+    registrant: RegistrantData
+    attendees: list[AttendeeData]
+    note: Optional[str] = None
+    status: RegistrationStatus
+    registered_at: datetime
+    update_token: str = ""
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
