@@ -143,14 +143,20 @@ def _build_full_registration_message(
     message["From"] = sender
     message["To"] = to_email
 
-    attendee_word = "účastníkov" if attendee_count != 1 else "účastníka"
+    # Build attendee count line only if there are attendees (not for "only_me" type)
+    if attendee_count > 0:
+        attendee_word = "účastníkov" if attendee_count != 1 else "účastníka"
+        attendee_line_text = f"Prihlásili ste {attendee_count} {attendee_word}.\n"
+        attendee_line_html = f"        Prihlásili ste <strong>{attendee_count} {attendee_word}</strong>.\n"
+    else:
+        attendee_line_text = ""
+        attendee_line_html = ""
 
     text_body = f"""\
 Ahoj {registrant_name}!
 
 Vaša registrácia na Detský biblický tábor bola úspešne prijatá.
-Prihlásili ste {attendee_count} {attendee_word}.
-
+{attendee_line_text}
 Čoskoro sa vám ozveme s ďalšími informáciami o platbe a programe.
 
 Pre úpravu alebo zrušenie registrácie použite tento odkaz:
@@ -168,8 +174,7 @@ S. Alexovič
 
       <p>
         Vaša registrácia na <strong>Detský biblický tábor</strong> bola úspešne prijatá.
-        Prihlásili ste <strong>{attendee_count} {attendee_word}</strong>.
-      </p>
+{attendee_line_html}      </p>
 
       <p>
         Čoskoro sa vám ozveme s ďalšími informáciami o platbe a programe.
