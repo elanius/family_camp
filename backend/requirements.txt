@@ -8,6 +8,8 @@ anyio==4.12.1
     # via
     #   starlette
     #   watchfiles
+bcrypt==5.0.0
+    # via passlib
 certifi==2026.1.4
     # via requests
 cffi==2.0.0
@@ -17,11 +19,15 @@ charset-normalizer==3.4.4
 click==8.3.1
     # via uvicorn
 cryptography==46.0.5
-    # via google-auth
+    # via
+    #   google-auth
+    #   python-jose
 dnspython==2.8.0
     # via
     #   email-validator
     #   pymongo
+ecdsa==0.19.2
+    # via python-jose
 email-validator==2.3.0
     # via pydantic
 fastapi==0.129.2
@@ -57,6 +63,12 @@ idna==3.11
     #   requests
 motor==3.7.1
     # via family-camp-backend (pyproject.toml)
+passlib==1.7.4
+    # via family-camp-backend (pyproject.toml)
+pay-by-square==0.2.0
+    # via family-camp-backend (pyproject.toml)
+pillow==12.2.0
+    # via qrcode
 proto-plus==1.27.1
     # via google-api-core
 protobuf==6.33.5
@@ -67,6 +79,7 @@ protobuf==6.33.5
 pyasn1==0.6.2
     # via
     #   pyasn1-modules
+    #   python-jose
     #   rsa
 pyasn1-modules==0.4.2
     # via google-auth
@@ -90,12 +103,22 @@ python-dotenv==1.2.1
     #   family-camp-backend (pyproject.toml)
     #   pydantic-settings
     #   uvicorn
+python-jose==3.5.0
+    # via family-camp-backend (pyproject.toml)
+python-multipart==0.0.24
+    # via family-camp-backend (pyproject.toml)
 pyyaml==6.0.3
     # via uvicorn
+qrcode==8.2
+    # via family-camp-backend (pyproject.toml)
 requests==2.32.5
     # via google-api-core
 rsa==4.9.1
-    # via google-auth
+    # via
+    #   google-auth
+    #   python-jose
+six==1.17.0
+    # via ecdsa
 starlette==0.52.1
     # via fastapi
 typing-extensions==4.15.0
