@@ -539,9 +539,7 @@ S. Alexovič
     return message
 
 
-def _send_sub_attendee_notification_via_gmail(
-    to_email: str, attendee_name: str, registered_by_name: str
-) -> None:
+def _send_sub_attendee_notification_via_gmail(to_email: str, attendee_name: str, registered_by_name: str) -> None:
     """Synchronous Gmail API call – intended to be run in a thread executor."""
     logger.debug(
         "[email] _send_sub_attendee_notification_via_gmail: start, to=%s, attendee=%s, registered_by=%s",
@@ -574,9 +572,7 @@ def _send_sub_attendee_notification_via_gmail(
     logger.debug("[email] Gmail API response: %s", result)
 
 
-async def send_sub_attendee_notification(
-    to_email: str, attendee_name: str, registered_by_name: str
-) -> None:
+async def send_sub_attendee_notification(to_email: str, attendee_name: str, registered_by_name: str) -> None:
     """Send notification email to sub-attendee informing them they were registered."""
     logger.debug("[email] send_sub_attendee_notification called for %s", to_email)
     settings = get_settings()
@@ -618,4 +614,123 @@ async def send_sub_attendee_notification(
         raise
     except Exception:
         logger.exception("[email] Unexpected error sending sub-attendee notification to %s", to_email)
+        raise
+
+
+# ── Payment received confirmation email ──────────────────────────────────
+
+
+def _build_payment_received_message(
+    sender: str, to_email: str, registrant_name: str, variable_symbol: str
+) -> MIMEMultipart:
+    message = MIMEMultipart("alternative")
+    message["Subject"] = "Detský biblický tábor – platba prijatá"
+    message["From"] = sender
+    message["To"] = to_email
+
+    text_body = f"""\
+Ahoj {registrant_name}!
+
+Vaša platba za Detský biblický tábor bola prijatá (variabilný symbol: {variable_symbol}).
+
+Vaša registrácia je teraz potvrdená. Tešíme sa na vás!
+
+Za prípravný tím
+S. Alexovič
+"""
+
+    html_body = f"""\
+<html>
+  <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
+    <div style="max-width: 600px;">
+      <p>Ahoj <strong>{registrant_name}</strong>!</p>
+
+      <p>
+        Vaša platba za <strong>Detský biblický tábor</strong> bola úspešne prijatá
+        (variabilný symbol: <strong>{variable_symbol}</strong>).
+      </p>
+
+      <p>Vaša registrácia je teraz potvrdená. Tešíme sa na vás!</p>
+
+      <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
+        Za prípravný tím<br>
+        S. Alexovič
+      </p>
+    </div>
+  </body>
+</html>
+"""
+
+    message.attach(MIMEText(text_body, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
+    return message
+
+
+def _send_payment_received_via_gmail(to_email: str, registrant_name: str, variable_symbol: str) -> None:
+    logger.debug("[email] _send_payment_received_via_gmail: start, to=%s", to_email)
+    settings = get_settings()
+
+    creds = Credentials(
+        token=None,
+        refresh_token=settings.gmail_refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=settings.gmail_client_id,
+        client_secret=settings.gmail_client_secret,
+        scopes=GMAIL_SCOPES,
+    )
+    logger.debug("[email] refreshing OAuth2 token...")
+    creds.refresh(Request())
+    logger.debug("[email] token refreshed successfully, valid=%s", creds.valid)
+
+    mime_message = _build_payment_received_message(settings.gmail_user, to_email, registrant_name, variable_symbol)
+    raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
+
+    logger.debug("[email] calling Gmail API send...")
+    service = build("gmail", "v1", credentials=creds)
+    result = service.users().messages().send(userId="me", body={"raw": raw}).execute()
+    logger.debug("[email] Gmail API response: %s", result)
+
+
+async def send_payment_received_confirmation(to_email: str, registrant_name: str, variable_symbol: str) -> None:
+    """Send confirmation email to registrant when admin marks payment as received."""
+    logger.debug("[email] send_payment_received_confirmation called for %s", to_email)
+    settings = get_settings()
+
+    if not settings.email_enabled:
+        logger.info("[email] EMAIL_ENABLED=false – skipping send to %s", to_email)
+        return
+
+    missing = [
+        k
+        for k, v in {
+            "GMAIL_USER": settings.gmail_user,
+            "GMAIL_CLIENT_ID": settings.gmail_client_id,
+            "GMAIL_CLIENT_SECRET": settings.gmail_client_secret,
+            "GMAIL_REFRESH_TOKEN": settings.gmail_refresh_token,
+        }.items()
+        if not v
+    ]
+    if missing:
+        logger.warning(
+            "[email] Gmail OAuth2 credentials not configured – skipping. Missing: %s",
+            ", ".join(missing),
+        )
+        return
+
+    try:
+        loop = asyncio.get_event_loop()
+        logger.debug("[email] dispatching to thread executor...")
+        await loop.run_in_executor(
+            None,
+            _send_payment_received_via_gmail,
+            to_email,
+            registrant_name,
+            variable_symbol,
+        )
+        logger.info("[email] Payment received confirmation sent to %s", to_email)
+    except HttpError as exc:
+        logger.exception("[email] Gmail API HTTP error sending to %s: %s", to_email, exc)
+        raise
+    except Exception:
+        logger.exception("[email] Unexpected error sending payment received email to %s", to_email)
         raise

@@ -83,18 +83,18 @@ async def register(payload: RegistrationRequest) -> dict:
     registrant_full_name = f"{payload.registrant.name} {payload.registrant.surname}"
     for attendee in payload.attendees:
         if attendee.email:
-            attendee_full_name = f"{attendee.name} {attendee.surname}"
             try:
                 await send_sub_attendee_notification(
                     to_email=str(attendee.email),
-                    attendee_name=attendee_full_name,
+                    attendee_name=attendee.name,
                     registered_by_name=registrant_full_name,
                 )
             except Exception:
                 logger.warning(
-                    "Sub-attendee notification email failed for %s (%s) – continuing.",
+                    "Sub-attendee notification email failed for %s (%s %s) – continuing.",
                     attendee.email,
-                    attendee_full_name,
+                    attendee.name,
+                    attendee.surname,
                 )
 
     return {"message": "Registrácia prebehla úspešne."}

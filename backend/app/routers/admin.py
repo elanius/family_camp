@@ -21,7 +21,7 @@ from app.models import (
     TokenResponse,
 )
 from app.services.auth import create_access_token, get_current_admin, verify_password
-from app.services.email import send_payment_info_email
+from app.services.email import send_payment_info_email, send_payment_received_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +225,18 @@ async def apply_action(
         except Exception:
             logger.warning("Payment info email failed for %s – status already updated.", registrant["email"])
 
+    if action == "payment_received":
+        registrant = doc["registrant"]
+        vs = doc.get("variable_symbol", "–")
+        try:
+            await send_payment_received_confirmation(
+                to_email=registrant["email"],
+                registrant_name=registrant["name"],
+                variable_symbol=vs,
+            )
+        except Exception:
+            logger.warning("Payment received email failed for %s – status already updated.", registrant["email"])
+
     doc["status"] = new_status
     return _doc_to_item(doc)
 
@@ -316,7 +328,7 @@ async def send_payment_info_endpoint(
         qr_bytes = _qr_png_bytes(body.bysquare_string) if body.bysquare_string else None
         await send_payment_info_email(
             to_email=registrant["email"],
-            registrant_name=f"{registrant['name']} {registrant['surname']}",
+            registrant_name=registrant["name"],
             iban=body.iban,
             bank_name=body.bank_name,
             amount=body.amount,
