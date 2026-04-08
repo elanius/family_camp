@@ -1,8 +1,16 @@
 import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import AttendeeForm, { validateAttendee, type AttendeeData, type AttendeeErrors } from "../components/AttendeeForm";
+import AttendeeForm, {
+  validateAttendee,
+  type AttendeeData,
+  type AttendeeErrors,
+} from "../components/AttendeeForm";
 import { calculatePrice, CATEGORY_LABEL } from "../utils/pricing";
-import { useRegistration, type RegistrantData, type RegistrationType } from "../context/RegistrationContext";
+import {
+  useRegistration,
+  type RegistrantData,
+  type RegistrationType,
+} from "../context/RegistrationContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -25,7 +33,11 @@ function emptyRegistrant(): RegistrantData {
   return { name: "", surname: "", age: "", phone: "", email: "" };
 }
 
-function validateRegistrant(data: RegistrantData, includeAge: boolean, requireAdult = false): RegistrantErrors {
+function validateRegistrant(
+  data: RegistrantData,
+  includeAge: boolean,
+  requireAdult = false,
+): RegistrantErrors {
   const errors: RegistrantErrors = {};
   if (!data.name.trim()) errors.name = "Meno je povinné.";
   if (!data.surname.trim()) errors.surname = "Priezvisko je povinné.";
@@ -62,9 +74,22 @@ function hasErrors(errors: object): boolean {
 }
 
 export default function RegistrationFormPage() {
-  const { regType, setRegType, registrant, setRegistrant, attendees, setAttendees, note, setNote } = useRegistration();
-  const [registrantErrors, setRegistrantErrors] = useState<RegistrantErrors>({});
-  const [attendeeErrors, setAttendeeErrors] = useState<AttendeeErrors[]>(() => attendees.map(() => ({})));
+  const {
+    regType,
+    setRegType,
+    registrant,
+    setRegistrant,
+    attendees,
+    setAttendees,
+    note,
+    setNote,
+  } = useRegistration();
+  const [registrantErrors, setRegistrantErrors] = useState<RegistrantErrors>(
+    {},
+  );
+  const [attendeeErrors, setAttendeeErrors] = useState<AttendeeErrors[]>(() =>
+    attendees.map(() => ({})),
+  );
   const [touched, setTouched] = useState(false);
   const [isEmailTaken, setIsEmailTaken] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
@@ -94,8 +119,14 @@ export default function RegistrationFormPage() {
     }
   }
 
-  function handleAttendeeChange(index: number, field: keyof AttendeeData, value: string) {
-    const updated = attendees.map((a, i) => (i === index ? { ...a, [field]: value } : a));
+  function handleAttendeeChange(
+    index: number,
+    field: keyof AttendeeData,
+    value: string,
+  ) {
+    const updated = attendees.map((a, i) =>
+      i === index ? { ...a, [field]: value } : a,
+    );
     setAttendees(updated);
     if (touched) {
       setAttendeeErrors(updated.map((a) => validateAttendee(a)));
@@ -107,7 +138,9 @@ export default function RegistrationFormPage() {
     if (!email || !EMAIL_RE.test(email)) return;
     setIsCheckingEmail(true);
     try {
-      const res = await fetch(`${API_BASE}/api/registration/check-email?email=${encodeURIComponent(email)}`);
+      const res = await fetch(
+        `${API_BASE}/api/registration/check-email?email=${encodeURIComponent(email)}`,
+      );
       if (res.ok) {
         const data = (await res.json()) as { exists: boolean };
         setIsEmailTaken(data.exists);
@@ -138,7 +171,8 @@ export default function RegistrationFormPage() {
     setRegistrantErrors(rErr);
     setAttendeeErrors(aErrs);
 
-    if (hasErrors(rErr) || isEmailTaken || (!isOnlyMe && aErrs.some(hasErrors))) return;
+    if (hasErrors(rErr) || isEmailTaken || (!isOnlyMe && aErrs.some(hasErrors)))
+      return;
 
     const ageNum = includeAge ? parseInt(registrant.age, 10) : undefined;
 
@@ -170,38 +204,60 @@ export default function RegistrationFormPage() {
     navigate("/registration/summary", { state: { regType, payload } });
   }
 
-  const registrantLabel = regType === "just_others" ? "Kontaktná osoba (platiteľ)" : "Účastník (platiteľ)";
+  const registrantLabel =
+    regType === "just_others"
+      ? "Kontaktná osoba (platiteľ)"
+      : "Účastník (platiteľ)";
 
   // Live price preview — only count attendees whose age is already filled in
   const pricingAttendees: { name: string; surname: string; age: number }[] = [];
   if (regType !== "just_others") {
     const age = parseInt(registrant.age, 10);
     if (!isNaN(age) && age >= 0 && age <= 120) {
-      pricingAttendees.push({ name: registrant.name || "–", surname: registrant.surname || "", age });
+      pricingAttendees.push({
+        name: registrant.name || "–",
+        surname: registrant.surname || "",
+        age,
+      });
     }
   }
   if (regType !== "only_me") {
     for (const a of attendees) {
       const age = parseInt(a.age, 10);
       if (!isNaN(age) && age >= 0 && age <= 120) {
-        pricingAttendees.push({ name: a.name || "–", surname: a.surname || "", age });
+        pricingAttendees.push({
+          name: a.name || "–",
+          surname: a.surname || "",
+          age,
+        });
       }
     }
   }
-  const priceBreakdown = pricingAttendees.length > 0 ? calculatePrice(pricingAttendees) : null;
+  const priceBreakdown =
+    pricingAttendees.length > 0 ? calculatePrice(pricingAttendees) : null;
 
   return (
     <main className="reg-form-page">
       <div className="reg-form-page__inner">
         <h1 className="reg-form-page__title">Registrácia na tábor</h1>
-        <p className="reg-form-page__subtitle">Detský biblický tábor · ECAV Obišovce · 26.–31. júla 2026</p>
+        <p className="reg-form-page__subtitle">
+          Detský biblický tábor · ECAV Obišovce · 26.–31. júla 2026
+        </p>
 
         <form onSubmit={handleNext} noValidate className="reg-form">
           {/* ── Mode selector ───────────────────────────── */}
           <fieldset className="reg-form__mode">
-            <legend className="reg-form__mode-legend">Kto sa registruje?</legend>
+            <legend className="reg-form__mode-legend">
+              Kto sa registruje?
+            </legend>
             <label className="reg-form__mode-option">
-              <input type="radio" name="regType" value="only_me" checked={isOnlyMe} onChange={handleRegTypeChange} />
+              <input
+                type="radio"
+                name="regType"
+                value="only_me"
+                checked={isOnlyMe}
+                onChange={handleRegTypeChange}
+              />
               <span>
                 <strong>Len ja</strong> — registrujem iba seba
               </span>
@@ -215,7 +271,8 @@ export default function RegistrationFormPage() {
                 onChange={handleRegTypeChange}
               />
               <span>
-                <strong>Len ďalší</strong> — registrujem iných účastníkov (napr. rodič registruje deti)
+                <strong>Len ďalší</strong> — registrujem iných účastníkov (napr.
+                rodič registruje deti)
               </span>
             </label>
             <label className="reg-form__mode-option">
@@ -227,7 +284,8 @@ export default function RegistrationFormPage() {
                 onChange={handleRegTypeChange}
               />
               <span>
-                <strong>Ja a ďalší</strong> — registrujem seba spolu s ďalšími účastníkmi
+                <strong>Ja a ďalší</strong> — registrujem seba spolu s ďalšími
+                účastníkmi
               </span>
             </label>
           </fieldset>
@@ -237,12 +295,14 @@ export default function RegistrationFormPage() {
             <h2 className="reg-form__section-title">{registrantLabel}</h2>
             {(isMeAndOthers || isOnlyMe) && (
               <p className="reg-form__section-note">
-                Táto osoba bude zaradená medzi účastníkov tábora a zároveň bude zodpovedná za platbu.
+                Táto osoba bude zaradená medzi účastníkov tábora a zároveň bude
+                zodpovedná za platbu.
               </p>
             )}
             {regType === "just_others" && (
               <p className="reg-form__section-note">
-                Táto osoba sa tábora nezúčastní, ale bude zodpovedná za platbu a komunikáciu.
+                Táto osoba sa tábora nezúčastní, ale bude zodpovedná za platbu a
+                komunikáciu.
               </p>
             )}
 
@@ -256,10 +316,14 @@ export default function RegistrationFormPage() {
                   type="text"
                   className={`form-input${registrantErrors.name ? " is-invalid" : ""}`}
                   value={registrant.name}
-                  onChange={(e) => handleRegistrantChange("name", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("name", e.target.value)
+                  }
                   autoComplete="given-name"
                 />
-                {registrantErrors.name && <p className="form-error">{registrantErrors.name}</p>}
+                {registrantErrors.name && (
+                  <p className="form-error">{registrantErrors.name}</p>
+                )}
               </div>
 
               <div className="form-field">
@@ -271,10 +335,14 @@ export default function RegistrationFormPage() {
                   type="text"
                   className={`form-input${registrantErrors.surname ? " is-invalid" : ""}`}
                   value={registrant.surname}
-                  onChange={(e) => handleRegistrantChange("surname", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("surname", e.target.value)
+                  }
                   autoComplete="family-name"
                 />
-                {registrantErrors.surname && <p className="form-error">{registrantErrors.surname}</p>}
+                {registrantErrors.surname && (
+                  <p className="form-error">{registrantErrors.surname}</p>
+                )}
               </div>
             </div>
 
@@ -290,9 +358,13 @@ export default function RegistrationFormPage() {
                   max={120}
                   className={`form-input${registrantErrors.age ? " is-invalid" : ""}`}
                   value={registrant.age}
-                  onChange={(e) => handleRegistrantChange("age", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("age", e.target.value)
+                  }
                 />
-                {registrantErrors.age && <p className="form-error">{registrantErrors.age}</p>}
+                {registrantErrors.age && (
+                  <p className="form-error">{registrantErrors.age}</p>
+                )}
               </div>
             )}
 
@@ -306,11 +378,15 @@ export default function RegistrationFormPage() {
                   type="tel"
                   className={`form-input${registrantErrors.phone ? " is-invalid" : ""}`}
                   value={registrant.phone}
-                  onChange={(e) => handleRegistrantChange("phone", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("phone", e.target.value)
+                  }
                   autoComplete="tel"
                   placeholder="+421 900 000 000"
                 />
-                {registrantErrors.phone && <p className="form-error">{registrantErrors.phone}</p>}
+                {registrantErrors.phone && (
+                  <p className="form-error">{registrantErrors.phone}</p>
+                )}
               </div>
 
               <div className="form-field">
@@ -322,16 +398,20 @@ export default function RegistrationFormPage() {
                   type="email"
                   className={`form-input${registrantErrors.email || isEmailTaken ? " is-invalid" : ""}`}
                   value={registrant.email}
-                  onChange={(e) => handleRegistrantChange("email", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("email", e.target.value)
+                  }
                   onBlur={handleEmailBlur}
                   autoComplete="email"
                   placeholder="vas@email.sk"
                 />
-                {registrantErrors.email && <p className="form-error">{registrantErrors.email}</p>}
+                {registrantErrors.email && (
+                  <p className="form-error">{registrantErrors.email}</p>
+                )}
                 {!registrantErrors.email && isEmailTaken && (
                   <p className="form-error">
-                    Tento e-mail je už zaregistrovaný. Pre úpravu registrácie použite odkaz, ktorý ste dostali v
-                    potvrdzovacom e-maile.
+                    Tento e-mail je už zaregistrovaný. Pre úpravu registrácie
+                    použite odkaz, ktorý ste dostali v potvrdzovacom e-maile.
                   </p>
                 )}
               </div>
@@ -341,9 +421,12 @@ export default function RegistrationFormPage() {
           {/* ── Attendees ───────────────────────────────── */}
           {!isOnlyMe && (
             <section className="reg-form__section">
-              <h2 className="reg-form__section-title">{isMeAndOthers ? "Ďalší účastníci" : "Účastníci"}</h2>
+              <h2 className="reg-form__section-title">
+                {isMeAndOthers ? "Ďalší účastníci" : "Účastníci"}
+              </h2>
               <p className="reg-form__section-note">
-                Pre účastníkov starších ako 14 rokov môžete uviesť telefón a e-mail.
+                Pre účastníkov starších ako 14 rokov môžete uviesť telefón a
+                e-mail.
               </p>
 
               {attendees.map((attendee, i) => (
@@ -359,7 +442,11 @@ export default function RegistrationFormPage() {
                 />
               ))}
 
-              <button type="button" className="reg-form__add-btn" onClick={addAttendee}>
+              <button
+                type="button"
+                className="reg-form__add-btn"
+                onClick={addAttendee}
+              >
                 + Pridať účastníka
               </button>
             </section>
@@ -368,21 +455,14 @@ export default function RegistrationFormPage() {
           {/* ── Note ────────────────────────────────────── */}
           <section className="reg-form__section">
             <h2 className="reg-form__section-title">Poznámka</h2>
-            <p className="reg-form__section-note">
-              Sem môžete uviesť dôležité informácie, ktoré potrebujeme vedieť vopred — napríklad lieky, špeciálnu diétu
-              alebo iné zdravotné poznámky.
-            </p>
             <div className="form-field">
-              <label className="form-label" htmlFor="reg-note">
-                Poznámka
-              </label>
               <textarea
                 id="reg-note"
                 className="form-input"
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Napr.: Peter je alergický na orechy, Jana je vegetariánka…"
+                placeholder="Napr.: Peter je alergický na orechy, Jana bere každý deň lieky na astmu..."
               />
             </div>
           </section>
@@ -392,20 +472,33 @@ export default function RegistrationFormPage() {
             <div className="price-preview">
               <h2 className="price-preview__title">Predbežná cena</h2>
               {priceBreakdown.isLatePeriod && (
-                <p className="price-preview__late-note">Registrácia po 1. júla — ceny sú zvýšené o 10&nbsp;€.</p>
+                <p className="price-preview__late-note">
+                  Registrácia po 1. júla — ceny sú zvýšené o 10&nbsp;€.
+                </p>
               )}
               <ul className="price-preview__list">
                 {priceBreakdown.items.map((item, i) => (
                   <li key={i} className="price-preview__item">
                     <span className="price-preview__item-label">
-                      {item.name} ({item.age} r.) – {CATEGORY_LABEL[item.category]}
-                      {item.lateFee > 0 && <span className="price-preview__late-fee"> +{item.lateFee}&nbsp;€</span>}
+                      {item.name} ({item.age} r.) –{" "}
+                      {CATEGORY_LABEL[item.category]}
+                      {item.lateFee > 0 && (
+                        <span className="price-preview__late-fee">
+                          {" "}
+                          +{item.lateFee}&nbsp;€
+                        </span>
+                      )}
                       {item.discount > 0 && (
-                        <span className="price-preview__discount"> &minus;{item.discount}&nbsp;€</span>
+                        <span className="price-preview__discount">
+                          {" "}
+                          &minus;{item.discount}&nbsp;€
+                        </span>
                       )}
                     </span>
                     <span className="price-preview__item-price">
-                      {item.finalPrice === 0 ? "zadarmo" : `${item.finalPrice}\u00a0€`}
+                      {item.finalPrice === 0
+                        ? "zadarmo"
+                        : `${item.finalPrice}\u00a0€`}
                     </span>
                   </li>
                 ))}
@@ -418,7 +511,11 @@ export default function RegistrationFormPage() {
           )}
 
           {/* ── Next ────────────────────────────────────── */}
-          <button type="submit" className="reg-form__submit" disabled={isEmailTaken || isCheckingEmail}>
+          <button
+            type="submit"
+            className="reg-form__submit"
+            disabled={isEmailTaken || isCheckingEmail}
+          >
             Ďalej →
           </button>
         </form>

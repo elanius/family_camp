@@ -7,7 +7,7 @@ from pydantic import EmailStr
 from app.config import get_settings
 from app.database import get_db
 from app.models import RegistrationRecord, RegistrationRequest, RegistrationTokenResponse
-from app.services.email import send_full_registration_confirmation
+from app.services.email import send_full_registration_confirmation, send_sub_attendee_notification
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ async def register(payload: RegistrationRequest) -> dict:
     settings = get_settings()
     update_link = f"{settings.app_base_url}/update/{token}"
 
+    # Send confirmation email to the main registrant
     try:
         await send_full_registration_confirmation(
             to_email=str(payload.registrant.email),
@@ -77,6 +78,24 @@ async def register(payload: RegistrationRequest) -> dict:
         )
     except Exception:
         logger.warning("Confirmation email failed for %s – continuing.", payload.registrant.email)
+
+    # Send notification emails to sub-attendees with email addresses
+    registrant_full_name = f"{payload.registrant.name} {payload.registrant.surname}"
+    for attendee in payload.attendees:
+        if attendee.email:
+            attendee_full_name = f"{attendee.name} {attendee.surname}"
+            try:
+                await send_sub_attendee_notification(
+                    to_email=str(attendee.email),
+                    attendee_name=attendee_full_name,
+                    registered_by_name=registrant_full_name,
+                )
+            except Exception:
+                logger.warning(
+                    "Sub-attendee notification email failed for %s (%s) – continuing.",
+                    attendee.email,
+                    attendee_full_name,
+                )
 
     return {"message": "Registrácia prebehla úspešne."}
 

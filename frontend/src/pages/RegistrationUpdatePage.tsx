@@ -1,6 +1,10 @@
 import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import AttendeeForm, { validateAttendee, type AttendeeData, type AttendeeErrors } from "../components/AttendeeForm";
+import AttendeeForm, {
+  validateAttendee,
+  type AttendeeData,
+  type AttendeeErrors,
+} from "../components/AttendeeForm";
 import { calculatePrice, CATEGORY_LABEL } from "../utils/pricing";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -33,7 +37,10 @@ function emptyAttendee(): AttendeeData {
   return { name: "", surname: "", age: "", phone: "", email: "" };
 }
 
-function validateRegistrant(data: RegistrantData, includeAge: boolean): RegistrantErrors {
+function validateRegistrant(
+  data: RegistrantData,
+  includeAge: boolean,
+): RegistrantErrors {
   const errors: RegistrantErrors = {};
   if (!data.name.trim()) errors.name = "Meno je povinné.";
   if (!data.surname.trim()) errors.surname = "Priezvisko je povinné.";
@@ -69,7 +76,13 @@ function hasErrors(errors: object): boolean {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 type LoadState = "loading" | "not-found" | "paid" | "cancelled" | "ready";
-type SaveState = "idle" | "saving" | "saved" | "error" | "locked" | "email-conflict";
+type SaveState =
+  | "idle"
+  | "saving"
+  | "saved"
+  | "error"
+  | "locked"
+  | "email-conflict";
 type CancelState = "idle" | "confirming" | "cancelling" | "done" | "locked";
 
 export default function RegistrationUpdatePage() {
@@ -92,7 +105,9 @@ export default function RegistrationUpdatePage() {
   });
   const [attendees, setAttendees] = useState<AttendeeData[]>([emptyAttendee()]);
   const [note, setNote] = useState("");
-  const [registrantErrors, setRegistrantErrors] = useState<RegistrantErrors>({});
+  const [registrantErrors, setRegistrantErrors] = useState<RegistrantErrors>(
+    {},
+  );
   const [attendeeErrors, setAttendeeErrors] = useState<AttendeeErrors[]>([{}]);
   const [isEmailTaken, setIsEmailTaken] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
@@ -156,7 +171,10 @@ export default function RegistrationUpdatePage() {
         setRegistrant({
           name: data.registrant.name,
           surname: data.registrant.surname,
-          age: data.registrant.age !== undefined ? String(data.registrant.age) : "",
+          age:
+            data.registrant.age !== undefined
+              ? String(data.registrant.age)
+              : "",
           phone: data.registrant.phone,
           email: data.registrant.email,
           is_attendee: data.registrant.is_attendee,
@@ -194,7 +212,9 @@ export default function RegistrationUpdatePage() {
     if (!email || !EMAIL_RE.test(email) || email === originalEmail) return;
     setIsCheckingEmail(true);
     try {
-      const res = await fetch(`${API_BASE}/api/registration/check-email?email=${encodeURIComponent(email)}`);
+      const res = await fetch(
+        `${API_BASE}/api/registration/check-email?email=${encodeURIComponent(email)}`,
+      );
       if (res.ok) {
         const data = (await res.json()) as { exists: boolean };
         setIsEmailTaken(data.exists);
@@ -206,8 +226,14 @@ export default function RegistrationUpdatePage() {
     }
   }
 
-  function handleAttendeeChange(index: number, field: keyof AttendeeData, value: string) {
-    const updated = attendees.map((a, i) => (i === index ? { ...a, [field]: value } : a));
+  function handleAttendeeChange(
+    index: number,
+    field: keyof AttendeeData,
+    value: string,
+  ) {
+    const updated = attendees.map((a, i) =>
+      i === index ? { ...a, [field]: value } : a,
+    );
     setAttendees(updated);
     if (touched) {
       setAttendeeErrors(updated.map((a) => validateAttendee(a)));
@@ -237,7 +263,8 @@ export default function RegistrationUpdatePage() {
 
     if (hasErrors(rErr) || isEmailTaken || aErrs.some(hasErrors)) return;
 
-    const ageNum = includeAge && registrant.age ? parseInt(registrant.age, 10) : undefined;
+    const ageNum =
+      includeAge && registrant.age ? parseInt(registrant.age, 10) : undefined;
 
     const payload = {
       registration_type: regType,
@@ -291,7 +318,9 @@ export default function RegistrationUpdatePage() {
   async function handleCancelConfirm() {
     setCancelState("cancelling");
     try {
-      const res = await fetch(`${API_BASE}/api/registration/${token}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/api/registration/${token}`, {
+        method: "DELETE",
+      });
       if (res.status === 200) {
         setCancelState("done");
       } else if (res.status === 403) {
@@ -310,16 +339,25 @@ export default function RegistrationUpdatePage() {
   if (isMeAndOthers) {
     const age = parseInt(registrant.age, 10);
     if (!isNaN(age) && age >= 0 && age <= 120) {
-      pricingAttendees.push({ name: registrant.name || "–", surname: registrant.surname || "", age });
+      pricingAttendees.push({
+        name: registrant.name || "–",
+        surname: registrant.surname || "",
+        age,
+      });
     }
   }
   for (const a of attendees) {
     const age = parseInt(a.age, 10);
     if (!isNaN(age) && age >= 0 && age <= 120) {
-      pricingAttendees.push({ name: a.name || "–", surname: a.surname || "", age });
+      pricingAttendees.push({
+        name: a.name || "–",
+        surname: a.surname || "",
+        age,
+      });
     }
   }
-  const priceBreakdown = pricingAttendees.length > 0 ? calculatePrice(pricingAttendees) : null;
+  const priceBreakdown =
+    pricingAttendees.length > 0 ? calculatePrice(pricingAttendees) : null;
 
   // ── State screens ────────────────────────────────────────────────────────
 
@@ -338,8 +376,15 @@ export default function RegistrationUpdatePage() {
       <main className="reg-form-page">
         <div className="reg-form-page__inner">
           <h1 className="reg-form-page__title">Neplatný odkaz</h1>
-          <p>Registrácia nebola nájdená. Skontrolujte odkaz, ktorý ste dostali v e-maile.</p>
-          <button className="reg-form__submit" style={{ marginTop: "2rem" }} onClick={() => navigate("/")}>
+          <p>
+            Registrácia nebola nájdená. Skontrolujte odkaz, ktorý ste dostali v
+            e-maile.
+          </p>
+          <button
+            className="reg-form__submit"
+            style={{ marginTop: "2rem" }}
+            onClick={() => navigate("/")}
+          >
             Späť na hlavnú stránku
           </button>
         </div>
@@ -353,7 +398,11 @@ export default function RegistrationUpdatePage() {
         <div className="reg-form-page__inner">
           <h1 className="reg-form-page__title">Registrácia je zaplatená</h1>
           <p>Zmeny nie sú možné po uhradení platby za tábor.</p>
-          <button className="reg-form__submit" style={{ marginTop: "2rem" }} onClick={() => navigate("/")}>
+          <button
+            className="reg-form__submit"
+            style={{ marginTop: "2rem" }}
+            onClick={() => navigate("/")}
+          >
             Späť na hlavnú stránku
           </button>
         </div>
@@ -367,7 +416,11 @@ export default function RegistrationUpdatePage() {
         <div className="reg-form-page__inner">
           <h1 className="reg-form-page__title">Registrácia bola zrušená</h1>
           <p>Táto registrácia bola zrušená a nie je možné ju upravovať.</p>
-          <button className="reg-form__submit" style={{ marginTop: "2rem" }} onClick={() => navigate("/")}>
+          <button
+            className="reg-form__submit"
+            style={{ marginTop: "2rem" }}
+            onClick={() => navigate("/")}
+          >
             Späť na hlavnú stránku
           </button>
         </div>
@@ -381,9 +434,17 @@ export default function RegistrationUpdatePage() {
         <div className="reg-form-page__inner">
           <div className="reg-form-page__success">
             <p className="reg-form-page__success-icon">✅</p>
-            <h1 className="reg-form-page__success-title">Registrácia bola zrušená.</h1>
-            <p className="reg-form-page__success-text">Vaša registrácia na tábor bola úspešne zrušená.</p>
-            <button className="reg-form__submit" style={{ marginTop: "2rem" }} onClick={() => navigate("/")}>
+            <h1 className="reg-form-page__success-title">
+              Registrácia bola zrušená.
+            </h1>
+            <p className="reg-form-page__success-text">
+              Vaša registrácia na tábor bola úspešne zrušená.
+            </p>
+            <button
+              className="reg-form__submit"
+              style={{ marginTop: "2rem" }}
+              onClick={() => navigate("/")}
+            >
               Späť na hlavnú stránku
             </button>
           </div>
@@ -392,13 +453,17 @@ export default function RegistrationUpdatePage() {
     );
   }
 
-  const registrantLabel = isMeAndOthers ? "Účastník (platiteľ)" : "Kontaktná osoba (platiteľ)";
+  const registrantLabel = isMeAndOthers
+    ? "Účastník (platiteľ)"
+    : "Kontaktná osoba (platiteľ)";
 
   return (
     <main className="reg-form-page">
       <div className="reg-form-page__inner">
         <h1 className="reg-form-page__title">Úprava registrácie</h1>
-        <p className="reg-form-page__subtitle">Detský biblický tábor · ECAV Obišovce · 26.–31. júla 2026</p>
+        <p className="reg-form-page__subtitle">
+          Detský biblický tábor · ECAV Obišovce · 26.–31. júla 2026
+        </p>
 
         <form onSubmit={handleSave} noValidate className="reg-form">
           {/* ── Registrant ──────────────────────────────── */}
@@ -415,10 +480,14 @@ export default function RegistrationUpdatePage() {
                   type="text"
                   className={`form-input${registrantErrors.name ? " is-invalid" : ""}`}
                   value={registrant.name}
-                  onChange={(e) => handleRegistrantChange("name", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("name", e.target.value)
+                  }
                   autoComplete="given-name"
                 />
-                {registrantErrors.name && <p className="form-error">{registrantErrors.name}</p>}
+                {registrantErrors.name && (
+                  <p className="form-error">{registrantErrors.name}</p>
+                )}
               </div>
 
               <div className="form-field">
@@ -430,10 +499,14 @@ export default function RegistrationUpdatePage() {
                   type="text"
                   className={`form-input${registrantErrors.surname ? " is-invalid" : ""}`}
                   value={registrant.surname}
-                  onChange={(e) => handleRegistrantChange("surname", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("surname", e.target.value)
+                  }
                   autoComplete="family-name"
                 />
-                {registrantErrors.surname && <p className="form-error">{registrantErrors.surname}</p>}
+                {registrantErrors.surname && (
+                  <p className="form-error">{registrantErrors.surname}</p>
+                )}
               </div>
             </div>
 
@@ -449,9 +522,13 @@ export default function RegistrationUpdatePage() {
                   max={120}
                   className={`form-input${registrantErrors.age ? " is-invalid" : ""}`}
                   value={registrant.age}
-                  onChange={(e) => handleRegistrantChange("age", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("age", e.target.value)
+                  }
                 />
-                {registrantErrors.age && <p className="form-error">{registrantErrors.age}</p>}
+                {registrantErrors.age && (
+                  <p className="form-error">{registrantErrors.age}</p>
+                )}
               </div>
             )}
 
@@ -465,11 +542,15 @@ export default function RegistrationUpdatePage() {
                   type="tel"
                   className={`form-input${registrantErrors.phone ? " is-invalid" : ""}`}
                   value={registrant.phone}
-                  onChange={(e) => handleRegistrantChange("phone", e.target.value)}
+                  onChange={(e) =>
+                    handleRegistrantChange("phone", e.target.value)
+                  }
                   autoComplete="tel"
                   placeholder="+421 900 000 000"
                 />
-                {registrantErrors.phone && <p className="form-error">{registrantErrors.phone}</p>}
+                {registrantErrors.phone && (
+                  <p className="form-error">{registrantErrors.phone}</p>
+                )}
               </div>
 
               <div className="form-field">
@@ -481,15 +562,20 @@ export default function RegistrationUpdatePage() {
                   type="email"
                   className={`form-input${registrantErrors.email || isEmailTaken ? " is-invalid" : ""}`}
                   value={registrant.email}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleRegistrantChange("email", e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleRegistrantChange("email", e.target.value)
+                  }
                   onBlur={handleEmailBlur}
                   autoComplete="email"
                   placeholder="vas@email.sk"
                 />
-                {registrantErrors.email && <p className="form-error">{registrantErrors.email}</p>}
+                {registrantErrors.email && (
+                  <p className="form-error">{registrantErrors.email}</p>
+                )}
                 {!registrantErrors.email && isEmailTaken && (
                   <p className="form-error">
-                    Tento e-mail je už zaregistrovaný. Zadajte iný e-mail alebo použite pôvodný.
+                    Tento e-mail je už zaregistrovaný. Zadajte iný e-mail alebo
+                    použite pôvodný.
                   </p>
                 )}
               </div>
@@ -498,9 +584,12 @@ export default function RegistrationUpdatePage() {
 
           {/* ── Attendees ───────────────────────────────── */}
           <section className="reg-form__section">
-            <h2 className="reg-form__section-title">{isMeAndOthers ? "Ďalší účastníci" : "Účastníci"}</h2>
+            <h2 className="reg-form__section-title">
+              {isMeAndOthers ? "Ďalší účastníci" : "Účastníci"}
+            </h2>
             <p className="reg-form__section-note">
-              Pre účastníkov starších ako 14 rokov môžete uviesť telefón a e-mail.
+              Pre účastníkov starších ako 14 rokov môžete uviesť telefón a
+              e-mail.
             </p>
 
             {attendees.map((attendee, i) => (
@@ -516,7 +605,11 @@ export default function RegistrationUpdatePage() {
               />
             ))}
 
-            <button type="button" className="reg-form__add-btn" onClick={addAttendee}>
+            <button
+              type="button"
+              className="reg-form__add-btn"
+              onClick={addAttendee}
+            >
               + Pridať účastníka
             </button>
           </section>
@@ -524,21 +617,14 @@ export default function RegistrationUpdatePage() {
           {/* ── Note ──────────────────────────────────────── */}
           <section className="reg-form__section">
             <h2 className="reg-form__section-title">Poznámka</h2>
-            <p className="reg-form__section-note">
-              Sem môžete uviesť dôležité informácie, ktoré potrebujeme vedieť vopred — napríklad lieky, špeciálnu diétu
-              alebo iné poznámky.
-            </p>
             <div className="form-field">
-              <label className="form-label" htmlFor="reg-note">
-                Poznámka
-              </label>
               <textarea
                 id="reg-note"
                 className="form-input"
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Napr.: Peter je alergický na orechy, Jana je vegetariánka…"
+                placeholder="Napr.: Peter je alergický na orechy, Jana bere každý deň lieky na astmu..."
               />
             </div>
           </section>
@@ -548,20 +634,33 @@ export default function RegistrationUpdatePage() {
             <div className="price-preview">
               <h2 className="price-preview__title">Predbežná cena</h2>
               {priceBreakdown.isLatePeriod && (
-                <p className="price-preview__late-note">Registrácia po 1. júla — ceny sú zvýšené o 10&nbsp;€.</p>
+                <p className="price-preview__late-note">
+                  Registrácia po 1. júla — ceny sú zvýšené o 10&nbsp;€.
+                </p>
               )}
               <ul className="price-preview__list">
                 {priceBreakdown.items.map((item, i) => (
                   <li key={i} className="price-preview__item">
                     <span className="price-preview__item-label">
-                      {item.name} ({item.age} r.) – {CATEGORY_LABEL[item.category]}
-                      {item.lateFee > 0 && <span className="price-preview__late-fee"> +{item.lateFee}&nbsp;€</span>}
+                      {item.name} ({item.age} r.) –{" "}
+                      {CATEGORY_LABEL[item.category]}
+                      {item.lateFee > 0 && (
+                        <span className="price-preview__late-fee">
+                          {" "}
+                          +{item.lateFee}&nbsp;€
+                        </span>
+                      )}
                       {item.discount > 0 && (
-                        <span className="price-preview__discount"> &minus;{item.discount}&nbsp;€</span>
+                        <span className="price-preview__discount">
+                          {" "}
+                          &minus;{item.discount}&nbsp;€
+                        </span>
                       )}
                     </span>
                     <span className="price-preview__item-price">
-                      {item.finalPrice === 0 ? "zadarmo" : `${item.finalPrice}\u00a0€`}
+                      {item.finalPrice === 0
+                        ? "zadarmo"
+                        : `${item.finalPrice}\u00a0€`}
                     </span>
                   </li>
                 ))}
@@ -574,17 +673,27 @@ export default function RegistrationUpdatePage() {
           )}
 
           {/* ── Save feedback ────────────────────────────── */}
-          {saveState === "saved" && <p className="reg-form__submit-success">✅ Registrácia bola aktualizovaná.</p>}
+          {saveState === "saved" && (
+            <p className="reg-form__submit-success">
+              ✅ Registrácia bola aktualizovaná.
+            </p>
+          )}
           {saveState === "error" && (
-            <p className="reg-form__submit-error">❌ Uloženie zlyhalo. Skúste to prosím znova.</p>
+            <p className="reg-form__submit-error">
+              ❌ Uloženie zlyhalo. Skúste to prosím znova.
+            </p>
           )}
           {saveState === "locked" && (
-            <p className="reg-form__submit-error">❌ Registrácia je uzavretá, zmeny nie sú možné.</p>
+            <p className="reg-form__submit-error">
+              ❌ Registrácia je uzavretá, zmeny nie sú možné.
+            </p>
           )}
 
           {/* ── Cancel feedback ──────────────────────────── */}
           {cancelState === "locked" && (
-            <p className="reg-form__submit-error">❌ Registrácia je uzavretá, zrušenie nie je možné.</p>
+            <p className="reg-form__submit-error">
+              ❌ Registrácia je uzavretá, zrušenie nie je možné.
+            </p>
           )}
 
           {/* ── Actions ─────────────────────────────────── */}
@@ -592,7 +701,9 @@ export default function RegistrationUpdatePage() {
             <button
               type="submit"
               className="reg-form__submit"
-              disabled={isEmailTaken || isCheckingEmail || saveState === "saving"}
+              disabled={
+                isEmailTaken || isCheckingEmail || saveState === "saving"
+              }
             >
               {saveState === "saving" ? "Ukladám…" : "Uložiť zmeny"}
             </button>
@@ -600,7 +711,13 @@ export default function RegistrationUpdatePage() {
         </form>
 
         {/* ── Cancel registration ──────────────────────── */}
-        <div style={{ marginTop: "3rem", borderTop: "1px solid #e5e7eb", paddingTop: "2rem" }}>
+        <div
+          style={{
+            marginTop: "3rem",
+            borderTop: "1px solid #e5e7eb",
+            paddingTop: "2rem",
+          }}
+        >
           {cancelState === "idle" && (
             <button
               type="button"
@@ -613,7 +730,9 @@ export default function RegistrationUpdatePage() {
           )}
           {cancelState === "confirming" && (
             <div>
-              <p style={{ marginBottom: "1rem" }}>Naozaj chcete zrušiť registráciu? Táto akcia je nevratná.</p>
+              <p style={{ marginBottom: "1rem" }}>
+                Naozaj chcete zrušiť registráciu? Táto akcia je nevratná.
+              </p>
               <div style={{ display: "flex", gap: "1rem" }}>
                 <button
                   type="button"
@@ -623,7 +742,11 @@ export default function RegistrationUpdatePage() {
                 >
                   Áno, zrušiť registráciu
                 </button>
-                <button type="button" className="reg-summary__back-btn" onClick={() => setCancelState("idle")}>
+                <button
+                  type="button"
+                  className="reg-summary__back-btn"
+                  onClick={() => setCancelState("idle")}
+                >
                   Späť
                 </button>
               </div>
