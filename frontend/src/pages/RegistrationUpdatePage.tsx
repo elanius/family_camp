@@ -11,7 +11,7 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type RegistrationType = "me_and_others" | "just_others";
+type RegistrationType = "me_and_others" | "just_others" | "only_me";
 
 interface RegistrantData {
   name: string;
@@ -115,7 +115,8 @@ export default function RegistrationUpdatePage() {
   const [originalEmail, setOriginalEmail] = useState("");
 
   const isMeAndOthers = regType === "me_and_others";
-  const includeAge = isMeAndOthers;
+  const isOnlyMe = regType === "only_me";
+  const includeAge = isMeAndOthers || isOnlyMe;
 
   // ── Load registration on mount ───────────────────────────────────────────
 
@@ -172,7 +173,7 @@ export default function RegistrationUpdatePage() {
           name: data.registrant.name,
           surname: data.registrant.surname,
           age:
-            data.registrant.age !== undefined
+            data.registrant.age !== undefined && data.registrant.age !== null
               ? String(data.registrant.age)
               : "",
           phone: data.registrant.phone,
@@ -261,10 +262,14 @@ export default function RegistrationUpdatePage() {
     setRegistrantErrors(rErr);
     setAttendeeErrors(aErrs);
 
-    if (hasErrors(rErr) || isEmailTaken || aErrs.some(hasErrors)) return;
+    if (hasErrors(rErr) || isEmailTaken || (!isOnlyMe && aErrs.some(hasErrors)))
+      return;
 
+    // Always preserve the age value if it exists, even for "only_me" registrations
     const ageNum =
-      includeAge && registrant.age ? parseInt(registrant.age, 10) : undefined;
+      registrant.age && registrant.age.trim()
+        ? parseInt(registrant.age, 10)
+        : undefined;
 
     const payload = {
       registration_type: regType,
@@ -336,7 +341,7 @@ export default function RegistrationUpdatePage() {
   // ── Live price preview ───────────────────────────────────────────────────
 
   const pricingAttendees: { name: string; surname: string; age: number }[] = [];
-  if (isMeAndOthers) {
+  if (isMeAndOthers || isOnlyMe) {
     const age = parseInt(registrant.age, 10);
     if (!isNaN(age) && age >= 0 && age <= 120) {
       pricingAttendees.push({
@@ -583,36 +588,38 @@ export default function RegistrationUpdatePage() {
           </section>
 
           {/* ── Attendees ───────────────────────────────── */}
-          <section className="reg-form__section">
-            <h2 className="reg-form__section-title">
-              {isMeAndOthers ? "Ďalší účastníci" : "Účastníci"}
-            </h2>
-            <p className="reg-form__section-note">
-              Pre účastníkov starších ako 14 rokov môžete uviesť telefón a
-              e-mail.
-            </p>
+          {!isOnlyMe && (
+            <section className="reg-form__section">
+              <h2 className="reg-form__section-title">
+                {isMeAndOthers ? "Ďalší účastníci" : "Účastníci"}
+              </h2>
+              <p className="reg-form__section-note">
+                Pre účastníkov starších ako 14 rokov môžete uviesť telefón a
+                e-mail.
+              </p>
 
-            {attendees.map((attendee, i) => (
-              <AttendeeForm
-                key={i}
-                index={i}
-                label={`Účastník ${i + 1}`}
-                data={attendee}
-                errors={attendeeErrors[i] ?? {}}
-                onChange={handleAttendeeChange}
-                onRemove={removeAttendee}
-                showRemove={attendees.length > 1}
-              />
-            ))}
+              {attendees.map((attendee, i) => (
+                <AttendeeForm
+                  key={i}
+                  index={i}
+                  label={`Účastník ${i + 1}`}
+                  data={attendee}
+                  errors={attendeeErrors[i] ?? {}}
+                  onChange={handleAttendeeChange}
+                  onRemove={removeAttendee}
+                  showRemove={attendees.length > 1}
+                />
+              ))}
 
-            <button
-              type="button"
-              className="reg-form__add-btn"
-              onClick={addAttendee}
-            >
-              + Pridať účastníka
-            </button>
-          </section>
+              <button
+                type="button"
+                className="reg-form__add-btn"
+                onClick={addAttendee}
+              >
+                + Pridať účastníka
+              </button>
+            </section>
+          )}
 
           {/* ── Note ──────────────────────────────────────── */}
           <section className="reg-form__section">
@@ -624,7 +631,7 @@ export default function RegistrationUpdatePage() {
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Napr.: Peter je alergický na orechy, Jana bere každý deň lieky na astmu..."
+                placeholder="Napr.: Peter je alergický na orechy, Jana berie každý deň lieky na astmu..."
               />
             </div>
           </section>

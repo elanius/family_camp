@@ -462,7 +462,7 @@ export default function RegistrationFormPage() {
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Napr.: Peter je alergický na orechy, Jana bere každý deň lieky na astmu..."
+                placeholder="Napr.: Peter je alergický na orechy, Jana berie každý deň lieky na astmu..."
               />
             </div>
           </section>
