@@ -20,6 +20,7 @@ interface RegistrantData {
   phone: string;
   email: string;
   is_attendee: boolean;
+  transportation: "" | "individual" | "train_with_organizer";
 }
 
 interface RegistrantErrors {
@@ -28,6 +29,7 @@ interface RegistrantErrors {
   age?: string;
   phone?: string;
   email?: string;
+  transportation?: string;
 }
 
 const PHONE_RE = /^\+?[0-9\s\-]{9,15}$/;
@@ -66,6 +68,10 @@ function validateRegistrant(
     errors.email = "Zadajte platný e-mail.";
   }
 
+  if (!data.transportation) {
+    errors.transportation = "Doprava je povinná.";
+  }
+
   return errors;
 }
 
@@ -102,6 +108,7 @@ export default function RegistrationUpdatePage() {
     phone: "",
     email: "",
     is_attendee: false,
+    transportation: "",
   });
   const [attendees, setAttendees] = useState<AttendeeData[]>([emptyAttendee()]);
   const [note, setNote] = useState("");
@@ -146,6 +153,7 @@ export default function RegistrationUpdatePage() {
             phone: string;
             email: string;
             is_attendee: boolean;
+            transportation: "individual" | "train_with_organizer";
           };
           attendees: Array<{
             name: string;
@@ -179,6 +187,7 @@ export default function RegistrationUpdatePage() {
           phone: data.registrant.phone,
           email: data.registrant.email,
           is_attendee: data.registrant.is_attendee,
+          transportation: data.registrant.transportation,
         });
         setOriginalEmail(data.registrant.email);
         setAttendees(
@@ -280,6 +289,7 @@ export default function RegistrationUpdatePage() {
         phone: registrant.phone.trim(),
         email: registrant.email.trim(),
         is_attendee: registrant.is_attendee,
+        transportation: registrant.transportation,
       },
       attendees: attendees.map((a) => {
         const aAge = parseInt(a.age, 10);
@@ -584,6 +594,43 @@ export default function RegistrationUpdatePage() {
                   </p>
                 )}
               </div>
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">
+                Doprava <span className="form-required">*</span>
+              </label>
+              <div className="form-radio-group">
+                <label className="form-radio-option">
+                  <input
+                    type="radio"
+                    name="transportation"
+                    value="individual"
+                    checked={registrant.transportation === "individual"}
+                    onChange={(e) =>
+                      handleRegistrantChange("transportation", e.target.value)
+                    }
+                  />
+                  <span>Individuálna doprava</span>
+                </label>
+                <label className="form-radio-option">
+                  <input
+                    type="radio"
+                    name="transportation"
+                    value="train_with_organizer"
+                    checked={
+                      registrant.transportation === "train_with_organizer"
+                    }
+                    onChange={(e) =>
+                      handleRegistrantChange("transportation", e.target.value)
+                    }
+                  />
+                  <span>Doprava vlakom s organizátorom</span>
+                </label>
+              </div>
+              {registrantErrors.transportation && (
+                <p className="form-error">{registrantErrors.transportation}</p>
+              )}
             </div>
           </section>
 

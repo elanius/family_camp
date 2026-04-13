@@ -20,6 +20,7 @@ interface RegistrantErrors {
   age?: string;
   phone?: string;
   email?: string;
+  transportation?: string;
 }
 
 const PHONE_RE = /^\+?[0-9\s\-]{9,15}$/;
@@ -30,7 +31,14 @@ function emptyAttendee(): AttendeeData {
 }
 
 function emptyRegistrant(): RegistrantData {
-  return { name: "", surname: "", age: "", phone: "", email: "" };
+  return {
+    name: "",
+    surname: "",
+    age: "",
+    phone: "",
+    email: "",
+    transportation: "",
+  };
 }
 
 function validateRegistrant(
@@ -64,6 +72,10 @@ function validateRegistrant(
     errors.email = "E-mail je povinný.";
   } else if (!EMAIL_RE.test(data.email)) {
     errors.email = "Zadajte platný e-mail.";
+  }
+
+  if (!data.transportation) {
+    errors.transportation = "Doprava je povinná.";
   }
 
   return errors;
@@ -185,6 +197,7 @@ export default function RegistrationFormPage() {
         phone: registrant.phone.trim(),
         email: registrant.email.trim(),
         is_attendee: isMeAndOthers || isOnlyMe,
+        transportation: registrant.transportation,
       },
       attendees: isOnlyMe
         ? []
@@ -415,6 +428,43 @@ export default function RegistrationFormPage() {
                   </p>
                 )}
               </div>
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">
+                Doprava <span className="form-required">*</span>
+              </label>
+              <div className="form-radio-group">
+                <label className="form-radio-option">
+                  <input
+                    type="radio"
+                    name="transportation"
+                    value="individual"
+                    checked={registrant.transportation === "individual"}
+                    onChange={(e) =>
+                      handleRegistrantChange("transportation", e.target.value)
+                    }
+                  />
+                  <span>Individuálna doprava</span>
+                </label>
+                <label className="form-radio-option">
+                  <input
+                    type="radio"
+                    name="transportation"
+                    value="train_with_organizer"
+                    checked={
+                      registrant.transportation === "train_with_organizer"
+                    }
+                    onChange={(e) =>
+                      handleRegistrantChange("transportation", e.target.value)
+                    }
+                  />
+                  <span>Doprava vlakom s organizátorom</span>
+                </label>
+              </div>
+              {registrantErrors.transportation && (
+                <p className="form-error">{registrantErrors.transportation}</p>
+              )}
             </div>
           </section>
 

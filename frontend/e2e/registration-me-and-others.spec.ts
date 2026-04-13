@@ -14,17 +14,27 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("Me and Others registration", () => {
-  test("form page renders with mode selector and Me and Others selected by default", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "Registrácia na tábor" })).toBeVisible();
+  test("form page renders with mode selector and Me and Others selected by default", async ({
+    page,
+  }) => {
+    await expect(
+      page.getByRole("heading", { name: "Registrácia na tábor" }),
+    ).toBeVisible();
     await expect(page.getByRole("radio", { name: /Ja a ďalší/ })).toBeChecked();
-    await expect(page.getByRole("radio", { name: /Len ďalší/ })).not.toBeChecked();
+    await expect(
+      page.getByRole("radio", { name: /Len ďalší/ }),
+    ).not.toBeChecked();
   });
 
-  test("registrant section shows age field in Me and Others mode", async ({ page }) => {
+  test("registrant section shows age field in Me and Others mode", async ({
+    page,
+  }) => {
     await expect(page.getByLabel("Vek *").first()).toBeVisible();
   });
 
-  test("attendee older than 14 shows optional phone and email fields", async ({ page }) => {
+  test("attendee older than 14 shows optional phone and email fields", async ({
+    page,
+  }) => {
     // The attendee section starts with one attendee form
     const ageInput = page.getByLabel("Vek *").nth(1); // second age field is attendee
     await ageInput.fill("15");
@@ -33,7 +43,9 @@ test.describe("Me and Others registration", () => {
     await expect(page.getByLabel(/E-mail.*nepovinné/i).first()).toBeVisible();
   });
 
-  test("attendee 14 or younger does not show optional contact fields", async ({ page }) => {
+  test("attendee 14 or younger does not show optional contact fields", async ({
+    page,
+  }) => {
     const ageInput = page.getByLabel("Vek *").nth(1);
     await ageInput.fill("14");
 
@@ -53,7 +65,10 @@ test.describe("Me and Others registration", () => {
     await page.getByRole("button", { name: /Pridať účastníka/ }).click();
     await expect(page.locator(".attendee-form")).toHaveCount(2);
 
-    await page.getByRole("button", { name: /Odstrániť/ }).first().click();
+    await page
+      .getByRole("button", { name: /Odstrániť/ })
+      .first()
+      .click();
     await expect(page.locator(".attendee-form")).toHaveCount(1);
   });
 
@@ -64,6 +79,7 @@ test.describe("Me and Others registration", () => {
     await page.getByLabel("Vek *").first().fill("35");
     await page.getByLabel("Telefón *").fill("+421900123456");
     await page.getByLabel("E-mail *").fill("jan.novak@example.sk");
+    await page.getByRole("radio", { name: /Individuálna doprava/ }).click();
 
     // Fill first attendee
     await page.getByLabel("Meno *").nth(1).fill("Marek");
@@ -92,6 +108,9 @@ test.describe("Me and Others registration", () => {
     await page.getByLabel("Vek *").first().fill("35");
     await page.getByLabel("Telefón *").fill("+421900123456");
     await page.getByLabel("E-mail *").fill("jan@example.sk");
+    await page
+      .getByRole("radio", { name: /Doprava vlakom s organizátorom/ })
+      .click();
 
     await page.getByLabel("Meno *").nth(1).fill("Eva");
     await page.getByLabel("Priezvisko *").nth(1).fill("Nováková");
@@ -108,6 +127,7 @@ test.describe("Me and Others registration", () => {
         phone: "+421900123456",
         email: "jan@example.sk",
         is_attendee: true,
+        transportation: "train_with_organizer",
       },
       attendees: [{ name: "Eva", surname: "Nováková", age: 8 }],
     });

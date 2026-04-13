@@ -14,13 +14,17 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("Just Others registration", () => {
-  test("switching to Just Others hides the registrant age field", async ({ page }) => {
+  test("switching to Just Others hides the registrant age field", async ({
+    page,
+  }) => {
     // Age field should only appear for attendees, not for the registrant
     const registrantSection = page.locator(".reg-form__section").first();
     await expect(registrantSection.getByLabel("Vek *")).not.toBeVisible();
   });
 
-  test("registrant section still shows name, surname, phone, email", async ({ page }) => {
+  test("registrant section still shows name, surname, phone, email", async ({
+    page,
+  }) => {
     const registrantSection = page.locator(".reg-form__section").first();
     await expect(registrantSection.getByLabel("Meno *")).toBeVisible();
     await expect(registrantSection.getByLabel("Priezvisko *")).toBeVisible();
@@ -28,13 +32,17 @@ test.describe("Just Others registration", () => {
     await expect(registrantSection.getByLabel("E-mail *")).toBeVisible();
   });
 
-  test("attendee younger than 14 does not show optional contact fields", async ({ page }) => {
+  test("attendee younger than 14 does not show optional contact fields", async ({
+    page,
+  }) => {
     const ageInput = page.getByLabel("Vek *").first(); // only attendee age field
     await ageInput.fill("12");
     await expect(page.getByLabel(/Telefón.*nepovinné/i)).not.toBeVisible();
   });
 
-  test("attendee older than 14 shows optional phone and email", async ({ page }) => {
+  test("attendee older than 14 shows optional phone and email", async ({
+    page,
+  }) => {
     const ageInput = page.getByLabel("Vek *").first();
     await ageInput.fill("16");
     await expect(page.getByLabel(/Telefón.*nepovinné/i)).toBeVisible();
@@ -64,6 +72,7 @@ test.describe("Just Others registration", () => {
     await page.getByLabel("Priezvisko *").first().fill("Horváthová");
     await page.getByLabel("Telefón *").fill("+421911222333");
     await page.getByLabel("E-mail *").fill("mama@example.sk");
+    await page.getByRole("radio", { name: /Individuálna doprava/ }).click();
 
     // Fill first attendee (child)
     await page.getByLabel("Meno *").nth(1).fill("Tomáš");
@@ -86,6 +95,7 @@ test.describe("Just Others registration", () => {
         phone: "+421911222333",
         email: "mama@example.sk",
         is_attendee: false,
+        transportation: "individual",
       },
       attendees: [
         { name: "Tomáš", surname: "Horváth", age: 9 },
@@ -99,6 +109,7 @@ test.describe("Just Others registration", () => {
     await page.getByLabel("Priezvisko *").first().fill("Horváthová");
     await page.getByLabel("Telefón *").fill("+421911222333");
     await page.getByLabel("E-mail *").fill("mama@example.sk");
+    await page.getByRole("radio", { name: /Individuálna doprava/ }).click();
 
     await page.getByLabel("Meno *").nth(1).fill("Tomáš");
     await page.getByLabel("Priezvisko *").nth(1).fill("Horváth");

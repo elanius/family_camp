@@ -45,6 +45,7 @@ class RegistrantData(BaseModel):
     phone: str
     email: EmailStr
     is_attendee: bool
+    transportation: Literal["individual", "train_with_organizer"]
 
     @field_validator("phone")
     @classmethod

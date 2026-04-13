@@ -10,10 +10,13 @@ test.describe("Registration form validation", () => {
 
     // Registrant errors
     await expect(page.getByText("Meno je povinné.").first()).toBeVisible();
-    await expect(page.getByText("Priezvisko je povinné.").first()).toBeVisible();
+    await expect(
+      page.getByText("Priezvisko je povinné.").first(),
+    ).toBeVisible();
     await expect(page.getByText("Vek je povinný.").first()).toBeVisible();
     await expect(page.getByText("Telefón je povinný.")).toBeVisible();
     await expect(page.getByText("E-mail je povinný.")).toBeVisible();
+    await expect(page.getByText("Doprava je povinná.")).toBeVisible();
 
     // Attendee errors
     await expect(page.getByText("Meno je povinné.").nth(1)).toBeVisible();
@@ -30,16 +33,22 @@ test.describe("Registration form validation", () => {
   test("shows error for invalid phone format", async ({ page }) => {
     await page.getByLabel("Telefón *").fill("abc-invalid");
     await page.getByRole("button", { name: "Registrovať" }).click();
-    await expect(page.getByText("Zadajte platné telefónne číslo.")).toBeVisible();
+    await expect(
+      page.getByText("Zadajte platné telefónne číslo."),
+    ).toBeVisible();
   });
 
   test("shows error for age out of range", async ({ page }) => {
     await page.getByLabel("Vek *").first().fill("200");
     await page.getByRole("button", { name: "Registrovať" }).click();
-    await expect(page.getByText("Zadajte platný vek (0–120).").first()).toBeVisible();
+    await expect(
+      page.getByText("Zadajte platný vek (0–120).").first(),
+    ).toBeVisible();
   });
 
-  test("does not submit when registrant fields are missing", async ({ page }) => {
+  test("does not submit when registrant fields are missing", async ({
+    page,
+  }) => {
     let submitted = false;
     await page.route("/api/registration", async (route) => {
       submitted = true;
@@ -50,7 +59,9 @@ test.describe("Registration form validation", () => {
     expect(submitted).toBe(false);
   });
 
-  test("optional email on attendee over 14 accepts invalid format and shows error", async ({ page }) => {
+  test("optional email on attendee over 14 accepts invalid format and shows error", async ({
+    page,
+  }) => {
     const attendeeAgeInput = page.getByLabel("Vek *").nth(1);
     await attendeeAgeInput.fill("16");
 
@@ -61,7 +72,9 @@ test.describe("Registration form validation", () => {
     await expect(page.getByText("Zadajte platný e-mail.")).toBeVisible();
   });
 
-  test("optional phone on attendee over 14 accepts invalid format and shows error", async ({ page }) => {
+  test("optional phone on attendee over 14 accepts invalid format and shows error", async ({
+    page,
+  }) => {
     const attendeeAgeInput = page.getByLabel("Vek *").nth(1);
     await attendeeAgeInput.fill("17");
 
@@ -69,7 +82,9 @@ test.describe("Registration form validation", () => {
     await optionalPhone.fill("xyz");
 
     await page.getByRole("button", { name: "Registrovať" }).click();
-    await expect(page.getByText("Zadajte platné telefónne číslo.")).toBeVisible();
+    await expect(
+      page.getByText("Zadajte platné telefónne číslo."),
+    ).toBeVisible();
   });
 
   test("shows backend error message on 500 response", async ({ page }) => {
@@ -87,16 +102,21 @@ test.describe("Registration form validation", () => {
     await page.getByLabel("Vek *").first().fill("35");
     await page.getByLabel("Telefón *").fill("+421900000000");
     await page.getByLabel("E-mail *").fill("jan@example.sk");
+    await page.getByRole("radio", { name: /Individuálna doprava/ }).click();
     await page.getByLabel("Meno *").nth(1).fill("Eva");
     await page.getByLabel("Priezvisko *").nth(1).fill("Nováková");
     await page.getByLabel("Vek *").nth(1).fill("8");
 
     await page.getByRole("button", { name: "Registrovať" }).click();
 
-    await expect(page.getByText("Registrácia zlyhala. Skúste to prosím znova.")).toBeVisible();
+    await expect(
+      page.getByText("Registrácia zlyhala. Skúste to prosím znova."),
+    ).toBeVisible();
   });
 
-  test("Just Others mode: no age field for registrant, no age required error shown for it", async ({ page }) => {
+  test("Just Others mode: no age field for registrant, no age required error shown for it", async ({
+    page,
+  }) => {
     await page.getByRole("radio", { name: /Len ďalší/ }).click();
     await page.getByRole("button", { name: "Registrovať" }).click();
 
@@ -115,15 +135,21 @@ test.describe("Registration form validation", () => {
     });
 
     test("hides attendees section entirely", async ({ page }) => {
-      await expect(page.getByRole("heading", { name: /Ďalší účastníci|Účastníci/ })).not.toBeVisible();
-      await expect(page.getByRole("button", { name: /Pridať účastníka/ })).not.toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: /Ďalší účastníci|Účastníci/ }),
+      ).not.toBeVisible();
+      await expect(
+        page.getByRole("button", { name: /Pridať účastníka/ }),
+      ).not.toBeVisible();
     });
 
     test("shows age field for registrant", async ({ page }) => {
       await expect(page.getByLabel("Vek *")).toBeVisible();
     });
 
-    test("shows required field errors on empty submit (no attendee errors)", async ({ page }) => {
+    test("shows required field errors on empty submit (no attendee errors)", async ({
+      page,
+    }) => {
       await page.getByRole("button", { name: "Registrovať" }).click();
 
       await expect(page.getByText("Meno je povinné.")).toBeVisible();
@@ -131,6 +157,7 @@ test.describe("Registration form validation", () => {
       await expect(page.getByText("Vek je povinný.")).toBeVisible();
       await expect(page.getByText("Telefón je povinný.")).toBeVisible();
       await expect(page.getByText("E-mail je povinný.")).toBeVisible();
+      await expect(page.getByText("Doprava je povinná.")).toBeVisible();
 
       // No second set of errors from attendees
       await expect(page.getByText("Meno je povinné.")).toHaveCount(1);
@@ -149,23 +176,33 @@ test.describe("Registration form validation", () => {
       await page.getByLabel("Vek *").fill("30");
       await page.getByLabel("Telefón *").fill("+421900000000");
       await page.getByLabel("E-mail *").fill("jan@example.sk");
+      await page.getByRole("radio", { name: /Individuálna doprava/ }).click();
 
       await page.getByRole("button", { name: "Registrovať" }).click();
 
-      await expect(page.getByText("Registrácia prebehla úspešne!")).toBeVisible();
+      await expect(
+        page.getByText("Registrácia prebehla úspešne!"),
+      ).toBeVisible();
 
       const body = requestBody as {
         registration_type: string;
-        registrant: { is_attendee: boolean; age: number };
+        registrant: {
+          is_attendee: boolean;
+          age: number;
+          transportation: string;
+        };
         attendees: unknown[];
       };
       expect(body.registration_type).toBe("only_me");
       expect(body.registrant.is_attendee).toBe(true);
       expect(body.registrant.age).toBe(30);
+      expect(body.registrant.transportation).toBe("individual");
       expect(body.attendees).toHaveLength(0);
     });
 
-    test("does not submit when registrant fields are missing", async ({ page }) => {
+    test("does not submit when registrant fields are missing", async ({
+      page,
+    }) => {
       let submitted = false;
       await page.route("/api/registration", async (route) => {
         submitted = true;
@@ -189,7 +226,9 @@ test.describe("Registration form validation", () => {
 
       await page.getByRole("button", { name: "Registrovať" }).click();
 
-      await expect(page.getByText("Registrácia zlyhala. Skúste to prosím znova.")).toBeVisible();
+      await expect(
+        page.getByText("Registrácia zlyhala. Skúste to prosím znova."),
+      ).toBeVisible();
     });
   });
 });

@@ -10,10 +10,18 @@ export interface RegistrantData {
   age: string;
   phone: string;
   email: string;
+  transportation: "" | "individual" | "train_with_organizer";
 }
 
 function emptyRegistrant(): RegistrantData {
-  return { name: "", surname: "", age: "", phone: "", email: "" };
+  return {
+    name: "",
+    surname: "",
+    age: "",
+    phone: "",
+    email: "",
+    transportation: "",
+  };
 }
 
 function emptyAttendee(): AttendeeData {
@@ -32,7 +40,9 @@ interface RegistrationContextValue {
   resetForm: () => void;
 }
 
-const RegistrationContext = createContext<RegistrationContextValue | null>(null);
+const RegistrationContext = createContext<RegistrationContextValue | null>(
+  null,
+);
 
 export function RegistrationProvider({ children }: { children: ReactNode }) {
   const [regType, setRegType] = useState<RegistrationType>("me_and_others");
@@ -49,7 +59,17 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
 
   return (
     <RegistrationContext.Provider
-      value={{ regType, setRegType, registrant, setRegistrant, attendees, setAttendees, note, setNote, resetForm }}
+      value={{
+        regType,
+        setRegType,
+        registrant,
+        setRegistrant,
+        attendees,
+        setAttendees,
+        note,
+        setNote,
+        resetForm,
+      }}
     >
       {children}
     </RegistrationContext.Provider>
@@ -58,6 +78,7 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
 
 export function useRegistration(): RegistrationContextValue {
   const ctx = useContext(RegistrationContext);
-  if (!ctx) throw new Error("useRegistration must be used within RegistrationProvider");
+  if (!ctx)
+    throw new Error("useRegistration must be used within RegistrationProvider");
   return ctx;
 }

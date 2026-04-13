@@ -31,12 +31,14 @@ test.describe("Duplicate email check", () => {
     await page.goto("/registration/form");
   });
 
-  test("shows inline error when email is already registered", async ({ page }) => {
+  test("shows inline error when email is already registered", async ({
+    page,
+  }) => {
     await page.getByLabel("E-mail *").fill(TAKEN_EMAIL);
     await page.getByLabel("E-mail *").blur();
 
     await expect(
-      page.getByText("Tento e-mail je už zaregistrovaný.")
+      page.getByText("Tento e-mail je už zaregistrovaný."),
     ).toBeVisible();
   });
 
@@ -45,42 +47,62 @@ test.describe("Duplicate email check", () => {
     await page.getByLabel("E-mail *").blur();
 
     await expect(
-      page.getByText("Tento e-mail je už zaregistrovaný.")
+      page.getByText("Tento e-mail je už zaregistrovaný."),
     ).not.toBeVisible();
   });
 
-  test("clears error when user edits the email field again", async ({ page }) => {
+  test("clears error when user edits the email field again", async ({
+    page,
+  }) => {
     await page.getByLabel("E-mail *").fill(TAKEN_EMAIL);
     await page.getByLabel("E-mail *").blur();
-    await expect(page.getByText("Tento e-mail je už zaregistrovaný.")).toBeVisible();
+    await expect(
+      page.getByText("Tento e-mail je už zaregistrovaný."),
+    ).toBeVisible();
 
     // User starts typing a new email — error should clear immediately
     await page.getByLabel("E-mail *").fill(FREE_EMAIL);
-    await expect(page.getByText("Tento e-mail je už zaregistrovaný.")).not.toBeVisible();
+    await expect(
+      page.getByText("Tento e-mail je už zaregistrovaný."),
+    ).not.toBeVisible();
   });
 
-  test("Ďalej button is disabled while email-taken error is active", async ({ page }) => {
+  test("Ďalej button is disabled while email-taken error is active", async ({
+    page,
+  }) => {
     await page.getByLabel("E-mail *").fill(TAKEN_EMAIL);
     await page.getByLabel("E-mail *").blur();
-    await expect(page.getByText("Tento e-mail je už zaregistrovaný.")).toBeVisible();
+    await expect(
+      page.getByText("Tento e-mail je už zaregistrovaný."),
+    ).toBeVisible();
 
     await expect(page.getByRole("button", { name: "Ďalej →" })).toBeDisabled();
   });
 
-  test("Ďalej button is re-enabled after error is cleared", async ({ page }) => {
+  test("Ďalej button is re-enabled after error is cleared", async ({
+    page,
+  }) => {
     await page.getByLabel("E-mail *").fill(TAKEN_EMAIL);
     await page.getByLabel("E-mail *").blur();
     await expect(page.getByRole("button", { name: "Ďalej →" })).toBeDisabled();
 
     await page.getByLabel("E-mail *").fill(FREE_EMAIL);
-    await expect(page.getByRole("button", { name: "Ďalej →" })).not.toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Ďalej →" }),
+    ).not.toBeDisabled();
   });
 
-  test("does not call check-email for an invalid email format", async ({ page }) => {
+  test("does not call check-email for an invalid email format", async ({
+    page,
+  }) => {
     let checkEmailCalled = false;
     await page.route("/api/registration/check-email*", async (route) => {
       checkEmailCalled = true;
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exists: false }) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ exists: false }),
+      });
     });
 
     await page.getByLabel("E-mail *").fill("not-an-email");
@@ -91,10 +113,16 @@ test.describe("Duplicate email check", () => {
     expect(checkEmailCalled).toBe(false);
   });
 
-  test("shows duplicate email error on 409 from POST (summary page fallback)", async ({ page }) => {
+  test("shows duplicate email error on 409 from POST (summary page fallback)", async ({
+    page,
+  }) => {
     // check-email returns free so the user can proceed to summary
     await page.route("/api/registration/check-email*", async (route) => {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ exists: false }) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ exists: false }),
+      });
     });
 
     // POST returns 409 conflict
@@ -119,6 +147,7 @@ test.describe("Duplicate email check", () => {
     await page.getByLabel("Vek *").first().fill("35");
     await page.getByLabel("Telefón *").fill("+421900123456");
     await page.getByLabel("E-mail *").fill(FREE_EMAIL);
+    await page.getByRole("radio", { name: /Individuálna doprava/ }).click();
     await page.getByLabel("Meno *").nth(1).fill("Eva");
     await page.getByLabel("Priezvisko *").nth(1).fill("Nováková");
     await page.getByLabel("Vek *").nth(1).fill("10");

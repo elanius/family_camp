@@ -6,7 +6,12 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type RegistrationStatus = "new" | "wait_for_payment" | "paid" | "accepted" | "rejected";
+export type RegistrationStatus =
+  | "new"
+  | "wait_for_payment"
+  | "paid"
+  | "accepted"
+  | "rejected";
 
 export interface AttendeeData {
   name: string;
@@ -23,6 +28,7 @@ export interface RegistrantData {
   phone: string;
   email: string;
   is_attendee: boolean;
+  transportation: "individual" | "train_with_organizer";
 }
 
 export interface RegistrationItem {
@@ -90,7 +96,13 @@ interface RegistrationRowProps {
   onUpdate: (updated: RegistrationItem) => void;
 }
 
-function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: RegistrationRowProps) {
+function RegistrationRow({
+  item,
+  token,
+  expanded,
+  onToggle,
+  onUpdate,
+}: RegistrationRowProps) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +132,9 @@ function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: Registra
 
     if (
       action === "reject" &&
-      !window.confirm(`Reject registration for ${item.registrant.name} ${item.registrant.surname}?`)
+      !window.confirm(
+        `Reject registration for ${item.registrant.name} ${item.registrant.surname}?`,
+      )
     ) {
       return;
     }
@@ -129,10 +143,13 @@ function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: Registra
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/admin/registrations/${item.id}/action/${action}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `${API_BASE}/api/admin/registrations/${item.id}/action/${action}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -168,17 +185,26 @@ function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: Registra
               <span className="font-semibold text-gray-900">
                 {reg.name} {reg.surname}
               </span>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status]}`}>
+              <span
+                className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status]}`}
+              >
                 {STATUS_LABELS[item.status]}
               </span>
             </div>
             <div className="text-sm text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
               <span>{reg.email}</span>
               <span>{reg.phone}</span>
+              <span>
+                {reg.transportation === "individual"
+                  ? "🚗 Individual"
+                  : "🚂 Train w/ organizer"}
+              </span>
               <span className="font-medium text-gray-700">
                 {totalPeople} {totalPeople === 1 ? "person" : "people"}
               </span>
-              <span className="font-semibold text-green-800">€{pricing.total}</span>
+              <span className="font-semibold text-green-800">
+                €{pricing.total}
+              </span>
               <span className="text-gray-400">{regDate}</span>
               {item.update_token && (
                 <a
@@ -211,11 +237,16 @@ function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: Registra
         </div>
 
         {error && (
-          <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">{error}</p>
+          <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+            {error}
+          </p>
         )}
 
         {campers.length > 0 && (
-          <button onClick={onToggle} className="mt-2 text-xs text-green-700 hover:underline">
+          <button
+            onClick={onToggle}
+            className="mt-2 text-xs text-green-700 hover:underline"
+          >
             {expanded ? "Hide" : "Show"} members ({totalPeople})
           </button>
         )}
@@ -242,21 +273,36 @@ function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: Registra
                   <td className="px-4 py-2 text-gray-400 text-xs">{idx + 1}</td>
                   <td className="px-4 py-2 font-medium">{p.name}</td>
                   <td className="px-4 py-2">{p.age}</td>
-                  <td className="px-4 py-2 text-gray-500 text-xs">{CATEGORY_LABEL[p.category]}</td>
-                  <td className="px-4 py-2 text-right">€{p.basePrice + p.lateFee}</td>
-                  <td className="px-4 py-2 text-right text-green-700">{p.discount > 0 ? `-€${p.discount}` : "—"}</td>
+                  <td className="px-4 py-2 text-gray-500 text-xs">
+                    {CATEGORY_LABEL[p.category]}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    €{p.basePrice + p.lateFee}
+                  </td>
+                  <td className="px-4 py-2 text-right text-green-700">
+                    {p.discount > 0 ? `-€${p.discount}` : "—"}
+                  </td>
                   <td className="px-4 py-2 text-right font-semibold">
-                    {p.finalPrice === 0 ? <span className="text-gray-400">free</span> : `€${p.finalPrice}`}
+                    {p.finalPrice === 0 ? (
+                      <span className="text-gray-400">free</span>
+                    ) : (
+                      `€${p.finalPrice}`
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-gray-200 bg-gray-50">
-                <td colSpan={6} className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600">
+                <td
+                  colSpan={6}
+                  className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
+                >
                   Total
                 </td>
-                <td className="px-4 py-2.5 text-right font-bold text-green-800">€{pricing.total}</td>
+                <td className="px-4 py-2.5 text-right font-bold text-green-800">
+                  €{pricing.total}
+                </td>
               </tr>
             </tfoot>
           </table>
@@ -266,8 +312,12 @@ function RegistrationRow({ item, token, expanded, onToggle, onUpdate }: Registra
       {/* ── Note ── */}
       {item.note && (
         <div className="border-t border-gray-100 px-4 py-3 bg-yellow-50">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Note</p>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">{item.note}</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+            Note
+          </p>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">
+            {item.note}
+          </p>
         </div>
       )}
     </div>
@@ -282,7 +332,11 @@ interface RegistrationListProps {
   onUpdate: (updated: RegistrationItem) => void;
 }
 
-export default function RegistrationList({ items, token, onUpdate }: RegistrationListProps) {
+export default function RegistrationList({
+  items,
+  token,
+  onUpdate,
+}: RegistrationListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   // When item list changes (filter/refresh), collapse all by default
@@ -303,7 +357,9 @@ export default function RegistrationList({ items, token, onUpdate }: Registratio
   const allCollapsed = expandedIds.size === 0;
 
   if (items.length === 0) {
-    return <p className="text-center text-gray-400 py-16">No registrations found.</p>;
+    return (
+      <p className="text-center text-gray-400 py-16">No registrations found.</p>
+    );
   }
 
   return (
