@@ -1,5 +1,4 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import MainPage from "./pages/MainPage";
 import RegistrationLandingPage from "./pages/RegistrationLandingPage";
 import RegistrationFormPage from "./pages/RegistrationFormPage";
 import RegistrationSummaryPage from "./pages/RegistrationSummaryPage";
@@ -12,23 +11,39 @@ import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAdminAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/admin/login" replace />;
+  return isAuthenticated ? (
+    <>{children}</>
+  ) : (
+    <Navigate to="/admin/login" replace />
+  );
 }
 
 function App() {
   return (
     <AdminAuthProvider>
       <Routes>
-        <Route path="/" element={<MainPage />} />
-        <Route path="/registration" element={<RegistrationLandingPage />} />
+        <Route path="/" element={<RegistrationLandingPage />} />
         <Route
-          path="/registration/*"
+          path="/registration"
           element={
             <RegistrationProvider>
-              <Routes>
-                <Route path="form" element={<RegistrationFormPage />} />
-                <Route path="summary" element={<RegistrationSummaryPage />} />
-              </Routes>
+              <RegistrationFormPage />
+            </RegistrationProvider>
+          }
+        />
+        <Route
+          path="/form"
+          element={
+            <RegistrationProvider>
+              <RegistrationFormPage />
+            </RegistrationProvider>
+          }
+        />
+        <Route
+          path="/summary"
+          element={
+            <RegistrationProvider>
+              <RegistrationSummaryPage />
             </RegistrationProvider>
           }
         />
@@ -54,7 +69,10 @@ function App() {
         />
       </Routes>
       <footer>
-        <p>© {new Date().getFullYear()} Detský biblický tábor · ECAV Obišovce. Všetky práva vyhradené.</p>
+        <p>
+          © {new Date().getFullYear()} Detský biblický tábor · ECAV Obišovce.
+          Všetky práva vyhradené.
+        </p>
       </footer>
     </AdminAuthProvider>
   );

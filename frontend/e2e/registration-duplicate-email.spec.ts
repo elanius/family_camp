@@ -28,7 +28,7 @@ test.describe("Duplicate email check", () => {
       }
     });
 
-    await page.goto("/registration/form");
+    await page.goto("/form");
   });
 
   test("shows inline error when email is already registered", async ({
@@ -153,7 +153,7 @@ test.describe("Duplicate email check", () => {
     await page.getByLabel("Vek *").nth(1).fill("10");
 
     await page.getByRole("button", { name: "Ďalej →" }).click();
-    await expect(page).toHaveURL("/registration/summary");
+    await expect(page).toHaveURL("/summary");
 
     await page.getByRole("button", { name: "Registrovať" }).click();
 

@@ -214,7 +214,7 @@ export default function RegistrationFormPage() {
       ...(note.trim() && { note: note.trim() }),
     };
 
-    navigate("/registration/summary", { state: { regType, payload } });
+    navigate("/summary", { state: { regType, payload } });
   }
 
   const registrantLabel =

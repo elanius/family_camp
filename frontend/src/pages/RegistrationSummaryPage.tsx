@@ -44,7 +44,7 @@ export default function RegistrationSummaryPage() {
   const state = location.state as LocationState | null;
 
   if (!state?.payload) {
-    return <Navigate to="/registration/form" replace />;
+    return <Navigate to="/form" replace />;
   }
 
   const { payload } = state;

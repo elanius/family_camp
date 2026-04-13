@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
     });
   });
 
-  await page.goto("/registration/form");
+  await page.goto("/form");
   await page.getByRole("radio", { name: /Len ďalší/ }).click();
 });
 

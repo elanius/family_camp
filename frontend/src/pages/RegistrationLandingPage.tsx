@@ -13,10 +13,13 @@ export default function RegistrationLandingPage() {
         <div className="register__inner">
           <h2 className="register__heading">Registrácia na tábor</h2>
           <p className="register__description">
-            Registrácia je otvorená. Kliknutím na tlačidlo nižšie vyplníte registračný formulár pre seba a ďalších
-            účastníkov.
+            Registrácia je otvorená. Kliknutím na tlačidlo nižšie vyplníte
+            registračný formulár pre seba a ďalších účastníkov.
           </p>
-          <button className="register__button" onClick={() => navigate("/registration/form")}>
+          <button
+            className="register__button"
+            onClick={() => navigate("/form")}
+          >
             Zaregistrovať sa
           </button>
         </div>

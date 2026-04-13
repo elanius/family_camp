@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
     });
   });
 
-  await page.goto("/registration/form");
+  await page.goto("/form");
 });
 
 test.describe("Me and Others registration", () => {
