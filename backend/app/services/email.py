@@ -1,20 +1,24 @@
 import asyncio
-import base64
 import logging
+import smtplib
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+GMAIL_SMTP_HOST = "smtp.gmail.com"
+GMAIL_SMTP_PORT = 465
+
+
+def _smtp_send(mime_message: MIMEMultipart) -> None:
+    """Send a pre-built MIME message via Gmail SMTP using an App Password."""
+    settings = get_settings()
+    with smtplib.SMTP_SSL(GMAIL_SMTP_HOST, GMAIL_SMTP_PORT) as smtp:
+        smtp.login(settings.gmail_user, settings.gmail_app_password)
+        smtp.send_message(mime_message)
 
 
 def _build_message(sender: str, to_email: str) -> MIMEMultipart:
@@ -64,37 +68,12 @@ S. Alexovič
     return message
 
 
-def _send_via_gmail_api(to_email: str) -> None:
-    """Synchronous Gmail API call – intended to be run in a thread executor."""
-    logger.debug("[email] _send_via_gmail_api: start, to=%s", to_email)
+def _send_via_smtp(to_email: str) -> None:
+    """Send interest-check confirmation via Gmail SMTP."""
+    logger.debug("[email] _send_via_smtp: start, to=%s", to_email)
     settings = get_settings()
-    logger.debug(
-        "[email] credentials present: user=%s, client_id=%s, secret=%s, refresh_token=%s",
-        bool(settings.gmail_user),
-        bool(settings.gmail_client_id),
-        bool(settings.gmail_client_secret),
-        bool(settings.gmail_refresh_token),
-    )
-
-    creds = Credentials(
-        token=None,
-        refresh_token=settings.gmail_refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.gmail_client_id,
-        client_secret=settings.gmail_client_secret,
-        scopes=GMAIL_SCOPES,
-    )
-    logger.debug("[email] refreshing OAuth2 token...")
-    creds.refresh(Request())
-    logger.debug("[email] token refreshed successfully, valid=%s", creds.valid)
-
     mime_message = _build_message(settings.gmail_user, to_email)
-    raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
-
-    logger.debug("[email] calling Gmail API send...")
-    service = build("gmail", "v1", credentials=creds)
-    result = service.users().messages().send(userId="me", body={"raw": raw}).execute()
-    logger.debug("[email] Gmail API response: %s", result)
+    _smtp_send(mime_message)
 
 
 async def send_registration_confirmation(to_email: str) -> None:
@@ -109,15 +88,13 @@ async def send_registration_confirmation(to_email: str) -> None:
         k
         for k, v in {
             "GMAIL_USER": settings.gmail_user,
-            "GMAIL_CLIENT_ID": settings.gmail_client_id,
-            "GMAIL_CLIENT_SECRET": settings.gmail_client_secret,
-            "GMAIL_REFRESH_TOKEN": settings.gmail_refresh_token,
+            "GMAIL_APP_PASSWORD": settings.gmail_app_password,
         }.items()
         if not v
     ]
     if missing:
         logger.warning(
-            "[email] Gmail OAuth2 credentials not configured – skipping. Missing: %s",
+            "[email] Gmail credentials not configured – skipping. Missing: %s",
             ", ".join(missing),
         )
         return
@@ -125,11 +102,8 @@ async def send_registration_confirmation(to_email: str) -> None:
     try:
         loop = asyncio.get_event_loop()
         logger.debug("[email] dispatching to thread executor...")
-        await loop.run_in_executor(None, _send_via_gmail_api, to_email)
+        await loop.run_in_executor(None, _send_via_smtp, to_email)
         logger.info("[email] Confirmation email sent to %s", to_email)
-    except HttpError as exc:
-        logger.exception("[email] Gmail API HTTP error sending to %s: %s", to_email, exc)
-        raise
     except Exception:
         logger.exception("[email] Unexpected error sending confirmation email to %s", to_email)
         raise
@@ -199,46 +173,21 @@ S. Alexovič
     return message
 
 
-def _send_full_registration_via_gmail(
+def _send_full_registration_via_smtp(
     to_email: str, registrant_name: str, attendee_count: int, update_link: str
 ) -> None:
-    """Synchronous Gmail API call – intended to be run in a thread executor."""
+    """Send full registration confirmation via Gmail SMTP."""
     logger.debug(
-        "[email] _send_full_registration_via_gmail: start, to=%s, name=%s, attendees=%d",
+        "[email] _send_full_registration_via_smtp: start, to=%s, name=%s, attendees=%d",
         to_email,
         registrant_name,
         attendee_count,
     )
     settings = get_settings()
-    logger.debug(
-        "[email] credentials present: user=%s, client_id=%s, secret=%s, refresh_token=%s",
-        bool(settings.gmail_user),
-        bool(settings.gmail_client_id),
-        bool(settings.gmail_client_secret),
-        bool(settings.gmail_refresh_token),
-    )
-
-    creds = Credentials(
-        token=None,
-        refresh_token=settings.gmail_refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.gmail_client_id,
-        client_secret=settings.gmail_client_secret,
-        scopes=GMAIL_SCOPES,
-    )
-    logger.debug("[email] refreshing OAuth2 token...")
-    creds.refresh(Request())
-    logger.debug("[email] token refreshed successfully, valid=%s", creds.valid)
-
     mime_message = _build_full_registration_message(
         settings.gmail_user, to_email, registrant_name, attendee_count, update_link
     )
-    raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
-
-    logger.debug("[email] calling Gmail API send...")
-    service = build("gmail", "v1", credentials=creds)
-    result = service.users().messages().send(userId="me", body={"raw": raw}).execute()
-    logger.debug("[email] Gmail API response: %s", result)
+    _smtp_send(mime_message)
 
 
 async def send_full_registration_confirmation(
@@ -255,15 +204,13 @@ async def send_full_registration_confirmation(
         k
         for k, v in {
             "GMAIL_USER": settings.gmail_user,
-            "GMAIL_CLIENT_ID": settings.gmail_client_id,
-            "GMAIL_CLIENT_SECRET": settings.gmail_client_secret,
-            "GMAIL_REFRESH_TOKEN": settings.gmail_refresh_token,
+            "GMAIL_APP_PASSWORD": settings.gmail_app_password,
         }.items()
         if not v
     ]
     if missing:
         logger.warning(
-            "[email] Gmail OAuth2 credentials not configured – skipping. Missing: %s",
+            "[email] Gmail credentials not configured – skipping. Missing: %s",
             ", ".join(missing),
         )
         return
@@ -273,16 +220,13 @@ async def send_full_registration_confirmation(
         logger.debug("[email] dispatching to thread executor...")
         await loop.run_in_executor(
             None,
-            _send_full_registration_via_gmail,
+            _send_full_registration_via_smtp,
             to_email,
             registrant_name,
             attendee_count,
             update_link,
         )
         logger.info("[email] Full registration confirmation email sent to %s", to_email)
-    except HttpError as exc:
-        logger.exception("[email] Gmail API HTTP error sending to %s: %s", to_email, exc)
-        raise
     except Exception:
         logger.exception("[email] Unexpected error sending full registration email to %s", to_email)
         raise
@@ -405,7 +349,7 @@ S. Alexovič
     return outer
 
 
-def _send_payment_info_via_gmail(
+def _send_payment_info_via_smtp(
     to_email: str,
     registrant_name: str,
     iban: str,
@@ -416,17 +360,6 @@ def _send_payment_info_via_gmail(
     qr_png_bytes: bytes | None,
 ) -> None:
     settings = get_settings()
-
-    creds = Credentials(
-        token=None,
-        refresh_token=settings.gmail_refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.gmail_client_id,
-        client_secret=settings.gmail_client_secret,
-        scopes=GMAIL_SCOPES,
-    )
-    creds.refresh(Request())
-
     mime_message = _build_payment_info_message(
         settings.gmail_user,
         to_email,
@@ -438,10 +371,7 @@ def _send_payment_info_via_gmail(
         recipient_note,
         qr_png_bytes,
     )
-    raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
-
-    service = build("gmail", "v1", credentials=creds)
-    service.users().messages().send(userId="me", body={"raw": raw}).execute()
+    _smtp_send(mime_message)
 
 
 async def send_payment_info_email(
@@ -461,17 +391,15 @@ async def send_payment_info_email(
         logger.info("[email] EMAIL_ENABLED=false – skipping payment info email to %s", to_email)
         return
 
-    if not all(
-        [settings.gmail_user, settings.gmail_client_id, settings.gmail_client_secret, settings.gmail_refresh_token]
-    ):
-        logger.warning("[email] Gmail OAuth2 credentials not configured – skipping payment info email.")
+    if not all([settings.gmail_user, settings.gmail_app_password]):
+        logger.warning("[email] Gmail credentials not configured – skipping payment info email.")
         return
 
     try:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
-            _send_payment_info_via_gmail,
+            _send_payment_info_via_smtp,
             to_email,
             registrant_name,
             iban,
@@ -482,9 +410,6 @@ async def send_payment_info_email(
             qr_png_bytes,
         )
         logger.info("[email] Payment info email sent to %s", to_email)
-    except HttpError as exc:
-        logger.exception("[email] Gmail API error sending payment info to %s: %s", to_email, exc)
-        raise
     except Exception:
         logger.exception("[email] Failed to send payment info email to %s", to_email)
         raise
@@ -539,37 +464,19 @@ S. Alexovič
     return message
 
 
-def _send_sub_attendee_notification_via_gmail(to_email: str, attendee_name: str, registered_by_name: str) -> None:
-    """Synchronous Gmail API call – intended to be run in a thread executor."""
+def _send_sub_attendee_notification_via_smtp(to_email: str, attendee_name: str, registered_by_name: str) -> None:
+    """Send sub-attendee notification via Gmail SMTP."""
     logger.debug(
-        "[email] _send_sub_attendee_notification_via_gmail: start, to=%s, attendee=%s, registered_by=%s",
+        "[email] _send_sub_attendee_notification_via_smtp: start, to=%s, attendee=%s, registered_by=%s",
         to_email,
         attendee_name,
         registered_by_name,
     )
     settings = get_settings()
-
-    creds = Credentials(
-        token=None,
-        refresh_token=settings.gmail_refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.gmail_client_id,
-        client_secret=settings.gmail_client_secret,
-        scopes=GMAIL_SCOPES,
-    )
-    logger.debug("[email] refreshing OAuth2 token...")
-    creds.refresh(Request())
-    logger.debug("[email] token refreshed successfully, valid=%s", creds.valid)
-
     mime_message = _build_sub_attendee_notification_message(
         settings.gmail_user, to_email, attendee_name, registered_by_name
     )
-    raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
-
-    logger.debug("[email] calling Gmail API send...")
-    service = build("gmail", "v1", credentials=creds)
-    result = service.users().messages().send(userId="me", body={"raw": raw}).execute()
-    logger.debug("[email] Gmail API response: %s", result)
+    _smtp_send(mime_message)
 
 
 async def send_sub_attendee_notification(to_email: str, attendee_name: str, registered_by_name: str) -> None:
@@ -585,15 +492,13 @@ async def send_sub_attendee_notification(to_email: str, attendee_name: str, regi
         k
         for k, v in {
             "GMAIL_USER": settings.gmail_user,
-            "GMAIL_CLIENT_ID": settings.gmail_client_id,
-            "GMAIL_CLIENT_SECRET": settings.gmail_client_secret,
-            "GMAIL_REFRESH_TOKEN": settings.gmail_refresh_token,
+            "GMAIL_APP_PASSWORD": settings.gmail_app_password,
         }.items()
         if not v
     ]
     if missing:
         logger.warning(
-            "[email] Gmail OAuth2 credentials not configured – skipping. Missing: %s",
+            "[email] Gmail credentials not configured – skipping. Missing: %s",
             ", ".join(missing),
         )
         return
@@ -603,15 +508,12 @@ async def send_sub_attendee_notification(to_email: str, attendee_name: str, regi
         logger.debug("[email] dispatching to thread executor...")
         await loop.run_in_executor(
             None,
-            _send_sub_attendee_notification_via_gmail,
+            _send_sub_attendee_notification_via_smtp,
             to_email,
             attendee_name,
             registered_by_name,
         )
         logger.info("[email] Sub-attendee notification email sent to %s", to_email)
-    except HttpError as exc:
-        logger.exception("[email] Gmail API HTTP error sending to %s: %s", to_email, exc)
-        raise
     except Exception:
         logger.exception("[email] Unexpected error sending sub-attendee notification to %s", to_email)
         raise
@@ -666,29 +568,11 @@ S. Alexovič
     return message
 
 
-def _send_payment_received_via_gmail(to_email: str, registrant_name: str, variable_symbol: str) -> None:
-    logger.debug("[email] _send_payment_received_via_gmail: start, to=%s", to_email)
+def _send_payment_received_via_smtp(to_email: str, registrant_name: str, variable_symbol: str) -> None:
+    logger.debug("[email] _send_payment_received_via_smtp: start, to=%s", to_email)
     settings = get_settings()
-
-    creds = Credentials(
-        token=None,
-        refresh_token=settings.gmail_refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.gmail_client_id,
-        client_secret=settings.gmail_client_secret,
-        scopes=GMAIL_SCOPES,
-    )
-    logger.debug("[email] refreshing OAuth2 token...")
-    creds.refresh(Request())
-    logger.debug("[email] token refreshed successfully, valid=%s", creds.valid)
-
     mime_message = _build_payment_received_message(settings.gmail_user, to_email, registrant_name, variable_symbol)
-    raw = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
-
-    logger.debug("[email] calling Gmail API send...")
-    service = build("gmail", "v1", credentials=creds)
-    result = service.users().messages().send(userId="me", body={"raw": raw}).execute()
-    logger.debug("[email] Gmail API response: %s", result)
+    _smtp_send(mime_message)
 
 
 async def send_payment_received_confirmation(to_email: str, registrant_name: str, variable_symbol: str) -> None:
@@ -704,15 +588,13 @@ async def send_payment_received_confirmation(to_email: str, registrant_name: str
         k
         for k, v in {
             "GMAIL_USER": settings.gmail_user,
-            "GMAIL_CLIENT_ID": settings.gmail_client_id,
-            "GMAIL_CLIENT_SECRET": settings.gmail_client_secret,
-            "GMAIL_REFRESH_TOKEN": settings.gmail_refresh_token,
+            "GMAIL_APP_PASSWORD": settings.gmail_app_password,
         }.items()
         if not v
     ]
     if missing:
         logger.warning(
-            "[email] Gmail OAuth2 credentials not configured – skipping. Missing: %s",
+            "[email] Gmail credentials not configured – skipping. Missing: %s",
             ", ".join(missing),
         )
         return
@@ -722,15 +604,12 @@ async def send_payment_received_confirmation(to_email: str, registrant_name: str
         logger.debug("[email] dispatching to thread executor...")
         await loop.run_in_executor(
             None,
-            _send_payment_received_via_gmail,
+            _send_payment_received_via_smtp,
             to_email,
             registrant_name,
             variable_symbol,
         )
         logger.info("[email] Payment received confirmation sent to %s", to_email)
-    except HttpError as exc:
-        logger.exception("[email] Gmail API HTTP error sending to %s: %s", to_email, exc)
-        raise
     except Exception:
         logger.exception("[email] Unexpected error sending payment received email to %s", to_email)
         raise

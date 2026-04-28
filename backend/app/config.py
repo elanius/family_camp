@@ -21,11 +21,9 @@ class Settings(BaseSettings):
     # Email
     email_enabled: bool = True
 
-    # Gmail OAuth2
+    # Gmail SMTP
     gmail_user: str = ""
-    gmail_client_id: str = ""
-    gmail_client_secret: str = ""
-    gmail_refresh_token: str = ""
+    gmail_app_password: str = ""
 
     # Bank (payment info)
     bank_iban: str = ""
