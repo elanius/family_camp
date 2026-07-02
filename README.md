@@ -84,3 +84,7 @@ cd frontend
 npm run build
 # Output in frontend/dist/ – serve via FastAPI or a web server
 ```
+
+### Requirement for the next year
+
+- [ ] - Keep price in DB as it can change with date or as an extra discount for selected people

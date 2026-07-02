@@ -42,7 +42,8 @@ export function getCategory(age: number): AgeCategory {
 }
 
 function isLate(): boolean {
-  return new Date() >= LATE_FROM;
+  return false;
+  // return new Date() >= LATE_FROM;
 }
 
 export function calculatePrice(
