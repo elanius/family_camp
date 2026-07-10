@@ -270,7 +270,7 @@ Ahoj {registrant_name},
 
 ďakujeme za registráciu na Detský biblický tábor.
 
-Pre dokončenie registrácie prosíme uhradiť učastnický poplatok:
+Pre dokončenie registrácie prosíme uhradiť učastnícky poplatok:
 
   Suma:              {amount} EUR
   IBAN:              {iban}
@@ -292,7 +292,7 @@ S. Alexovič
 
       <p>ďakujeme za registráciu na <strong>Detský biblický tábor</strong>.</p>
 
-      <p>Pre dokončenie registrácie prosíme uhradiť učastnický poplatok:</p>
+      <p>Pre dokončenie registrácie prosíme uhradiť učastnícky poplatok:</p>
 
       <table style="border-collapse: collapse; margin: 1rem 0;">
         <tr>
