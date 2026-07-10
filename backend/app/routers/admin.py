@@ -91,7 +91,8 @@ def _age_category(age: int) -> str:
 
 
 def _calculate_total_amount(registrant: dict, attendees: list[dict]) -> int:
-    is_late = date.today() >= _LATE_FROM
+    # Late prices are turned off (mirrors frontend pricing.ts isLate()).
+    is_late = False  # date.today() >= _LATE_FROM
     all_ages: list[int] = []
     if registrant.get("is_attendee") and registrant.get("age") is not None:
         all_ages.append(int(registrant["age"]))
