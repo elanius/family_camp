@@ -28,9 +28,9 @@ def _build_message(sender: str, to_email: str) -> MIMEMultipart:
     message["To"] = to_email
 
     text_body = f"""\
-Ahoj!
+Ahoj,
 
-Ďakujeme za váš záujem o detský biblický tábor.
+ďakujeme za váš záujem o detský biblický tábor.
 Vašu e-mailovú adresu ({to_email}) sme si zaznamenali.
 
 Keď spustíme registráciu, budeme vás medzi prvými informovať.
@@ -43,10 +43,10 @@ S. Alexovič
 <html>
   <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
     <div style="max-width: 600px;">
-      <p>Ahoj!</p>
+      <p>Ahoj,</p>
 
       <p>
-        Ďakujeme za váš záujem o detský biblický tábor.
+        ďakujeme za váš záujem o detský biblický tábor.
         Vašu e-mailovú adresu <strong>{to_email}</strong> sme si zaznamenali.
       </p>
 
@@ -127,7 +127,7 @@ def _build_full_registration_message(
         attendee_line_html = ""
 
     text_body = f"""\
-Ahoj {registrant_name}!
+Ahoj {registrant_name},
 
 Vaša registrácia na Detský biblický tábor bola úspešne prijatá.
 {attendee_line_text}
@@ -144,7 +144,7 @@ S. Alexovič
 <html>
   <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
     <div style="max-width: 600px;">
-      <p>Ahoj <strong>{registrant_name}</strong>!</p>
+      <p>Ahoj <strong>{registrant_name}</strong>,</p>
 
       <p>
         Vaša registrácia na <strong>Detský biblický tábor</strong> bola úspešne prijatá.
@@ -254,8 +254,6 @@ def _build_payment_info_message(
     alt = MIMEMultipart("alternative")
     outer.attach(alt)
 
-    payment_deadline = "30. apríla 2026"
-
     qr_block_html = (
         (
             '<p style="margin: 1.5rem 0 0.5rem;">'
@@ -268,18 +266,17 @@ def _build_payment_info_message(
     )
 
     text_body = f"""\
-Ahoj {registrant_name}!
+Ahoj {registrant_name},
 
-Ďakujeme za registráciu na Detský biblický tábor.
+ďakujeme za registráciu na Detský biblický tábor.
 
-Pre dokončenie registrácie prosíme uhradiť registračný poplatok:
+Pre dokončenie registrácie prosíme uhradiť učastnický poplatok:
 
   Suma:              {amount} EUR
   IBAN:              {iban}
   Banka:             {bank_name}
   Variabilný symbol: {variable_symbol}
   Správa pre príjemcu: {recipient_note}
-  Termín platby:     {payment_deadline}
 
 Po prijatí platby vás budeme informovať e-mailom.
 
@@ -291,11 +288,11 @@ S. Alexovič
 <html>
   <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
     <div style="max-width: 600px;">
-      <p>Ahoj <strong>{registrant_name}</strong>!</p>
+      <p>Ahoj <strong>{registrant_name}</strong>,</p>
 
-      <p>Ďakujeme za registráciu na <strong>Detský biblický tábor</strong>.</p>
+      <p>ďakujeme za registráciu na <strong>Detský biblický tábor</strong>.</p>
 
-      <p>Pre dokončenie registrácie prosíme uhradiť registračný poplatok:</p>
+      <p>Pre dokončenie registrácie prosíme uhradiť učastnický poplatok:</p>
 
       <table style="border-collapse: collapse; margin: 1rem 0;">
         <tr>
@@ -317,10 +314,6 @@ S. Alexovič
         <tr>
           <td style="padding: 4px 16px 4px 0; color: #666;">Správa pre príjemcu:</td>
           <td style="padding: 4px 0;">{recipient_note}</td>
-        </tr>
-        <tr>
-          <td style="padding: 4px 16px 4px 0; color: #666;">Termín platby:</td>
-          <td style="padding: 4px 0;">{payment_deadline}</td>
         </tr>
       </table>
 
@@ -427,7 +420,7 @@ def _build_sub_attendee_notification_message(
     message["To"] = to_email
 
     text_body = f"""\
-Ahoj {attendee_name}!
+Ahoj {attendee_name},
 
 Potvrdzujeme, že ste boli zaregistrovaný/á na Detský biblický tábor.
 Registráciu vykonal/a: {registered_by_name}
@@ -440,7 +433,7 @@ S. Alexovič
 <html>
   <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
     <div style="max-width: 600px;">
-      <p>Ahoj <strong>{attendee_name}</strong>!</p>
+      <p>Ahoj <strong>{attendee_name}</strong>,</p>
 
       <p>
         Potvrdzujeme, že ste boli zaregistrovaný/á na <strong>Detský biblický tábor</strong>.
@@ -531,7 +524,7 @@ def _build_payment_received_message(
     message["To"] = to_email
 
     text_body = f"""\
-Ahoj {registrant_name}!
+Ahoj {registrant_name},
 
 Vaša platba za Detský biblický tábor bola prijatá (variabilný symbol: {variable_symbol}).
 
@@ -545,7 +538,7 @@ S. Alexovič
 <html>
   <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
     <div style="max-width: 600px;">
-      <p>Ahoj <strong>{registrant_name}</strong>!</p>
+      <p>Ahoj <strong>{registrant_name}</strong>,</p>
 
       <p>
         Vaša platba za <strong>Detský biblický tábor</strong> bola úspešne prijatá
