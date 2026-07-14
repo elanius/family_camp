@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "../admin.css";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import RegistrationList, { type RegistrationItem, type RegistrationStatus } from "../components/admin/RegistrationList";
@@ -86,7 +86,16 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <header className="bg-green-800 text-white px-6 py-4 flex items-center justify-between shadow">
-        <h1 className="text-lg font-bold tracking-wide">Camp Admin</h1>
+        <div className="flex items-center gap-4">
+          <span className="text-lg font-bold tracking-wide">Camp Admin</span>
+          <Link
+            to="/admin/attendees"
+            title="View attendees table"
+            className="text-sm font-medium text-white/80 hover:text-white transition-colors"
+          >
+            Attendees ↗
+          </Link>
+        </div>
         <button
           onClick={handleLogout}
           className="text-sm bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors"

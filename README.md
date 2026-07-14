@@ -88,3 +88,4 @@ npm run build
 ### Requirement for the next year
 
 - [ ] - Keep price in DB as it can change with date or as an extra discount for selected people
+- [ ] - Recipient name should match account owner

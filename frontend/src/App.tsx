@@ -5,6 +5,7 @@ import RegistrationSummaryPage from "./pages/RegistrationSummaryPage";
 import RegistrationUpdatePage from "./pages/RegistrationUpdatePage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminPage from "./pages/AdminPage";
+import AttendeeTablePage from "./pages/AttendeeTablePage";
 import PaymentInfoPage from "./pages/PaymentInfoPage";
 import { RegistrationProvider } from "./context/RegistrationContext";
 import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
@@ -56,6 +57,14 @@ function App() {
           element={
             <AdminRoute>
               <AdminPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/attendees"
+          element={
+            <AdminRoute>
+              <AttendeeTablePage />
             </AdminRoute>
           }
         />
