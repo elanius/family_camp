@@ -89,3 +89,6 @@ npm run build
 
 - [ ] - Keep price in DB as it can change with date or as an extra discount for selected people
 - [ ] - Recipient name should match account owner
+- [ ] - Field for admin's note
+- [ ] - Show unique id in CampAdmin form
+- [ ] - Quick filter by Name, Unique ID 
