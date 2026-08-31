@@ -13,10 +13,10 @@ class Settings(BaseSettings):
 
     # MongoDB
     mongodb_uri: str = "mongodb://localhost:27017"
-    mongodb_db: str = "kids-camp-2026"
+    mongodb_db: str = "evs-vzdelavanie-2026"
 
-    # App
-    app_base_url: str = "https://tabor.lutheran.sk"
+    # App — base URL used to build the "edit your registration" links in emails.
+    app_base_url: str = "http://localhost:5173"
 
     # Email
     email_enabled: bool = True

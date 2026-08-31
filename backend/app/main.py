@@ -19,14 +19,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(
-    title="Kids Camp API",
-    description="Pre-registration API for the kids camp.",
+    title="Vzdelávanie EVS API",
+    description="Registration API for the EVS biblical education weekend.",
     version="1.0.0",
     lifespan=lifespan,
 )
 
 origins = [
-    "https://tabor.lutheran.sk",
+    "https://vzdelavanie.evs.sk",
     "http://localhost:5500",
     "http://localhost:5173",
 ]

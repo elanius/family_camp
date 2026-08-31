@@ -1,234 +1,113 @@
 import { test, expect } from "@playwright/test";
+import { fillRegistrant, registrantRoom } from "./helpers";
+
+/** Only the inline field errors, not the section note that repeats the wording. */
+const packageErrors = (page: import("@playwright/test").Page) =>
+  page.locator(".form-error", { hasText: "Vyberte ubytovanie a stravu." });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/form");
+  await page.goto("/registration");
 });
 
 test.describe("Registration form validation", () => {
-  test("shows required field errors on empty submit", async ({ page }) => {
-    await page.getByRole("button", { name: "Registrovať" }).click();
+  test("reports every missing required registrant field", async ({ page }) => {
+    await page.getByRole("button", { name: /Ďalej/ }).click();
 
-    // Registrant errors
-    await expect(page.getByText("Meno je povinné.").first()).toBeVisible();
-    await expect(
-      page.getByText("Priezvisko je povinné.").first(),
-    ).toBeVisible();
-    await expect(page.getByText("Vek je povinný.").first()).toBeVisible();
+    await expect(page.getByText("Meno je povinné.")).toBeVisible();
+    await expect(page.getByText("Priezvisko je povinné.")).toBeVisible();
     await expect(page.getByText("Telefón je povinný.")).toBeVisible();
     await expect(page.getByText("E-mail je povinný.")).toBeVisible();
-    await expect(page.getByText("Doprava je povinná.")).toBeVisible();
-
-    // Attendee errors
-    await expect(page.getByText("Meno je povinné.").nth(1)).toBeVisible();
-    await expect(page.getByText("Priezvisko je povinné.").nth(1)).toBeVisible();
-    await expect(page.getByText("Vek je povinný.").nth(1)).toBeVisible();
+    await expect(packageErrors(page)).toHaveCount(1);
   });
 
-  test("shows error for invalid email format", async ({ page }) => {
-    await page.getByLabel("E-mail *").fill("not-an-email");
-    await page.getByRole("button", { name: "Registrovať" }).click();
+  test("stays on the form when validation fails", async ({ page }) => {
+    await page.getByRole("button", { name: /Ďalej/ }).click();
+    await expect(page).toHaveURL("/registration");
+  });
+
+  test("rejects a malformed e-mail", async ({ page }) => {
+    await page.locator("#reg-email").fill("not-an-email");
+    await page.getByRole("button", { name: /Ďalej/ }).click();
     await expect(page.getByText("Zadajte platný e-mail.")).toBeVisible();
   });
 
-  test("shows error for invalid phone format", async ({ page }) => {
-    await page.getByLabel("Telefón *").fill("abc-invalid");
-    await page.getByRole("button", { name: "Registrovať" }).click();
+  test("rejects a malformed phone number", async ({ page }) => {
+    await page.locator("#reg-phone").fill("abc-invalid");
+    await page.getByRole("button", { name: /Ďalej/ }).click();
     await expect(
       page.getByText("Zadajte platné telefónne číslo."),
     ).toBeVisible();
   });
 
-  test("shows error for age out of range", async ({ page }) => {
-    await page.getByLabel("Vek *").first().fill("200");
-    await page.getByRole("button", { name: "Registrovať" }).click();
-    await expect(
-      page.getByText("Zadajte platný vek (0–120).").first(),
-    ).toBeVisible();
-  });
-
-  test("does not submit when registrant fields are missing", async ({
+  test("a contact person who does not attend needs no package", async ({
     page,
   }) => {
-    let submitted = false;
-    await page.route("/api/registration", async (route) => {
-      submitted = true;
-      await route.fulfill({ status: 201, body: "{}" });
-    });
+    await page.getByRole("radio", { name: /Len ďalší/ }).check();
+    await page.getByRole("button", { name: /Ďalej/ }).click();
 
-    await page.getByRole("button", { name: "Registrovať" }).click();
-    expect(submitted).toBe(false);
+    // Only the attendee's package error is shown, not one for the registrant.
+    await expect(packageErrors(page)).toHaveCount(1);
   });
 
-  test("optional email on attendee over 14 accepts invalid format and shows error", async ({
+  test("each attendee must have a package", async ({ page }) => {
+    await page.getByRole("radio", { name: /Ja a ďalší/ }).check();
+    await fillRegistrant(page, { room: "double" });
+    await page.locator("#name-0").fill("Eva");
+    await page.locator("#surname-0").fill("Nováková");
+
+    await page.getByRole("button", { name: /Ďalej/ }).click();
+    await expect(packageErrors(page)).toHaveCount(1);
+    await expect(page).toHaveURL("/registration");
+  });
+
+  test("an optional attendee e-mail must still be well formed", async ({
     page,
   }) => {
-    const attendeeAgeInput = page.getByLabel("Vek *").nth(1);
-    await attendeeAgeInput.fill("16");
+    await page.getByRole("radio", { name: /Ja a ďalší/ }).check();
+    await fillRegistrant(page, { room: "double" });
+    await page.locator("#name-0").fill("Eva");
+    await page.locator("#surname-0").fill("Nováková");
+    await page.locator("#email-0").fill("bad-email");
 
-    const optionalEmail = page.getByLabel(/E-mail.*nepovinné/i).first();
-    await optionalEmail.fill("bad-email");
-
-    await page.getByRole("button", { name: "Registrovať" }).click();
+    await page.getByRole("button", { name: /Ďalej/ }).click();
     await expect(page.getByText("Zadajte platný e-mail.")).toBeVisible();
   });
 
-  test("optional phone on attendee over 14 accepts invalid format and shows error", async ({
-    page,
-  }) => {
-    const attendeeAgeInput = page.getByLabel("Vek *").nth(1);
-    await attendeeAgeInput.fill("17");
+  test("attendees can be added and removed", async ({ page }) => {
+    await page.getByRole("radio", { name: /Ja a ďalší/ }).check();
+    await expect(page.getByText("Účastník 1")).toBeVisible();
 
-    const optionalPhone = page.getByLabel(/Telefón.*nepovinné/i).first();
-    await optionalPhone.fill("xyz");
+    await page.getByRole("button", { name: /Pridať účastníka/ }).click();
+    await expect(page.getByText("Účastník 2")).toBeVisible();
 
-    await page.getByRole("button", { name: "Registrovať" }).click();
-    await expect(
-      page.getByText("Zadajte platné telefónne číslo."),
-    ).toBeVisible();
+    await page.getByRole("button", { name: /Odstrániť Účastník 2/ }).click();
+    await expect(page.getByText("Účastník 2")).not.toBeVisible();
   });
 
-  test("shows backend error message on 500 response", async ({ page }) => {
-    await page.route("/api/registration", async (route) => {
-      await route.fulfill({
-        status: 500,
+  test("blocks submission when the e-mail is already registered", async ({
+    page,
+  }) => {
+    await page.route("**/api/registration/check-email**", (route) =>
+      route.fulfill({
+        status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ detail: "Server error" }),
-      });
-    });
+        body: JSON.stringify({ exists: true }),
+      }),
+    );
 
-    // Fill valid form
-    await page.getByLabel("Meno *").first().fill("Ján");
-    await page.getByLabel("Priezvisko *").first().fill("Novák");
-    await page.getByLabel("Vek *").first().fill("35");
-    await page.getByLabel("Telefón *").fill("+421900000000");
-    await page.getByLabel("E-mail *").fill("jan@example.sk");
-    await page.getByRole("radio", { name: /Individuálna doprava/ }).click();
-    await page.getByLabel("Meno *").nth(1).fill("Eva");
-    await page.getByLabel("Priezvisko *").nth(1).fill("Nováková");
-    await page.getByLabel("Vek *").nth(1).fill("8");
+    await fillRegistrant(page, { room: "double" });
+    await page.locator("#reg-email").blur();
 
-    await page.getByRole("button", { name: "Registrovať" }).click();
-
-    await expect(
-      page.getByText("Registrácia zlyhala. Skúste to prosím znova."),
-    ).toBeVisible();
+    await expect(page.getByText("Tento e-mail je už prihlásený.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Ďalej/ })).toBeDisabled();
   });
 
-  test("Just Others mode: no age field for registrant, no age required error shown for it", async ({
+  test("does not advance while a required package is missing", async ({
     page,
   }) => {
-    await page.getByRole("radio", { name: /Len ďalší/ }).click();
-    await page.getByRole("button", { name: "Registrovať" }).click();
-
-    // Age error should only appear for attendees, not registrant
-    const ageErrors = page.getByText("Vek je povinný.");
-    // The attendee age error exists
-    await expect(ageErrors.first()).toBeVisible();
-
-    // There should be exactly one age error (the attendee), not two
-    await expect(ageErrors).toHaveCount(1);
-  });
-
-  test.describe("Only Me mode", () => {
-    test.beforeEach(async ({ page }) => {
-      await page.getByRole("radio", { name: /Len ja/ }).click();
-    });
-
-    test("hides attendees section entirely", async ({ page }) => {
-      await expect(
-        page.getByRole("heading", { name: /Ďalší účastníci|Účastníci/ }),
-      ).not.toBeVisible();
-      await expect(
-        page.getByRole("button", { name: /Pridať účastníka/ }),
-      ).not.toBeVisible();
-    });
-
-    test("shows age field for registrant", async ({ page }) => {
-      await expect(page.getByLabel("Vek *")).toBeVisible();
-    });
-
-    test("shows required field errors on empty submit (no attendee errors)", async ({
-      page,
-    }) => {
-      await page.getByRole("button", { name: "Registrovať" }).click();
-
-      await expect(page.getByText("Meno je povinné.")).toBeVisible();
-      await expect(page.getByText("Priezvisko je povinné.")).toBeVisible();
-      await expect(page.getByText("Vek je povinný.")).toBeVisible();
-      await expect(page.getByText("Telefón je povinný.")).toBeVisible();
-      await expect(page.getByText("E-mail je povinný.")).toBeVisible();
-      await expect(page.getByText("Doprava je povinná.")).toBeVisible();
-
-      // No second set of errors from attendees
-      await expect(page.getByText("Meno je povinné.")).toHaveCount(1);
-      await expect(page.getByText("Vek je povinný.")).toHaveCount(1);
-    });
-
-    test("submits successfully with only registrant data", async ({ page }) => {
-      let requestBody: unknown;
-      await page.route("/api/registration", async (route) => {
-        requestBody = JSON.parse(route.request().postData() ?? "{}");
-        await route.fulfill({ status: 201, body: "{}" });
-      });
-
-      await page.getByLabel("Meno *").fill("Ján");
-      await page.getByLabel("Priezvisko *").fill("Novák");
-      await page.getByLabel("Vek *").fill("30");
-      await page.getByLabel("Telefón *").fill("+421900000000");
-      await page.getByLabel("E-mail *").fill("jan@example.sk");
-      await page.getByRole("radio", { name: /Individuálna doprava/ }).click();
-
-      await page.getByRole("button", { name: "Registrovať" }).click();
-
-      await expect(
-        page.getByText("Registrácia prebehla úspešne!"),
-      ).toBeVisible();
-
-      const body = requestBody as {
-        registration_type: string;
-        registrant: {
-          is_attendee: boolean;
-          age: number;
-          transportation: string;
-        };
-        attendees: unknown[];
-      };
-      expect(body.registration_type).toBe("only_me");
-      expect(body.registrant.is_attendee).toBe(true);
-      expect(body.registrant.age).toBe(30);
-      expect(body.registrant.transportation).toBe("individual");
-      expect(body.attendees).toHaveLength(0);
-    });
-
-    test("does not submit when registrant fields are missing", async ({
-      page,
-    }) => {
-      let submitted = false;
-      await page.route("/api/registration", async (route) => {
-        submitted = true;
-        await route.fulfill({ status: 201, body: "{}" });
-      });
-
-      await page.getByRole("button", { name: "Registrovať" }).click();
-      expect(submitted).toBe(false);
-    });
-
-    test("shows backend error message on failure", async ({ page }) => {
-      await page.route("/api/registration", async (route) => {
-        await route.fulfill({ status: 500, body: "{}" });
-      });
-
-      await page.getByLabel("Meno *").fill("Ján");
-      await page.getByLabel("Priezvisko *").fill("Novák");
-      await page.getByLabel("Vek *").fill("30");
-      await page.getByLabel("Telefón *").fill("+421900000000");
-      await page.getByLabel("E-mail *").fill("jan@example.sk");
-
-      await page.getByRole("button", { name: "Registrovať" }).click();
-
-      await expect(
-        page.getByText("Registrácia zlyhala. Skúste to prosím znova."),
-      ).toBeVisible();
-    });
+    await fillRegistrant(page);
+    await expect(registrantRoom(page, "double")).not.toBeChecked();
+    await page.getByRole("button", { name: /Ďalej/ }).click();
+    await expect(page).toHaveURL("/registration");
   });
 });

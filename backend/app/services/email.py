@@ -12,6 +12,40 @@ logger = logging.getLogger(__name__)
 GMAIL_SMTP_HOST = "smtp.gmail.com"
 GMAIL_SMTP_PORT = 465
 
+EVENT_NAME = "Vzdelávanie EVS 2026"
+EVENT_DATES = "23. – 25. októbra 2026"
+EVENT_PLACE = "Hotel Máj***, Liptovský Ján"
+CONTACT_EMAIL = "lydia@evs.sk"
+CONTACT_PHONE = "0911 798 800"
+
+SIGNATURE_TEXT = f"""\
+S pozdravom
+tím EVS
+
+{CONTACT_EMAIL} · {CONTACT_PHONE}
+"""
+
+SIGNATURE_HTML = f"""\
+      <p style="margin-top: 2rem; color: #6b7280; font-size: 0.9rem; line-height: 1.6;">
+        S pozdravom<br>
+        <strong style="color: #374151;">tím EVS</strong><br>
+        <a href="mailto:{CONTACT_EMAIL}" style="color: #6b7280;">{CONTACT_EMAIL}</a> ·
+        {CONTACT_PHONE}
+      </p>
+"""
+
+HTML_OPEN = """\
+<html>
+  <body style="font-family: Georgia, 'Times New Roman', serif; color: #1f2937; margin: 0; padding: 0; line-height: 1.7;">
+    <div style="max-width: 600px;">
+"""
+
+HTML_CLOSE = """\
+    </div>
+  </body>
+</html>
+"""
+
 
 def _smtp_send(mime_message: MIMEMultipart) -> None:
     """Send a pre-built MIME message via Gmail SMTP using an App Password."""
@@ -21,70 +55,10 @@ def _smtp_send(mime_message: MIMEMultipart) -> None:
         smtp.send_message(mime_message)
 
 
-def _build_message(sender: str, to_email: str) -> MIMEMultipart:
-    message = MIMEMultipart("alternative")
-    message["Subject"] = "Detský biblický tábor – registrujeme váš záujem"
-    message["From"] = sender
-    message["To"] = to_email
-
-    text_body = f"""\
-Ahoj,
-
-ďakujeme za váš záujem o detský biblický tábor.
-Vašu e-mailovú adresu ({to_email}) sme si zaznamenali.
-
-Keď spustíme registráciu, budeme vás medzi prvými informovať.
-
-Za prípravný tím
-S. Alexovič
-"""
-
-    html_body = f"""\
-<html>
-  <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
-    <div style="max-width: 600px;">
-      <p>Ahoj,</p>
-
-      <p>
-        ďakujeme za váš záujem o detský biblický tábor.
-        Vašu e-mailovú adresu <strong>{to_email}</strong> sme si zaznamenali.
-      </p>
-
-      <p>
-        Keď spustíme registráciu, budeme vás medzi prvými informovať.
-      </p>
-
-      <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
-        Za prípravný tím<br>
-        S. Alexovič
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    message.attach(MIMEText(text_body, "plain", "utf-8"))
-    message.attach(MIMEText(html_body, "html", "utf-8"))
-    return message
-
-
-def _send_via_smtp(to_email: str) -> None:
-    """Send interest-check confirmation via Gmail SMTP."""
-    logger.debug("[email] _send_via_smtp: start, to=%s", to_email)
+def _credentials_missing() -> list[str]:
+    """Return the names of Gmail settings that are not configured."""
     settings = get_settings()
-    mime_message = _build_message(settings.gmail_user, to_email)
-    _smtp_send(mime_message)
-
-
-async def send_registration_confirmation(to_email: str) -> None:
-    logger.debug("[email] send_registration_confirmation called for %s", to_email)
-    settings = get_settings()
-
-    if not settings.email_enabled:
-        logger.info("[email] EMAIL_ENABLED=false – skipping send to %s", to_email)
-        return
-
-    missing = [
+    return [
         k
         for k, v in {
             "GMAIL_USER": settings.gmail_user,
@@ -92,81 +66,143 @@ async def send_registration_confirmation(to_email: str) -> None:
         }.items()
         if not v
     ]
-    if missing:
+
+
+async def _dispatch(send_fn, to_email: str, *args) -> None:
+    """Run a blocking SMTP send off the event loop, honouring EMAIL_ENABLED."""
+    settings = get_settings()
+
+    if not settings.email_enabled:
+        logger.info("[email] EMAIL_ENABLED=false – skipping send to %s", to_email)
+        return
+
+    if missing := _credentials_missing():
         logger.warning(
             "[email] Gmail credentials not configured – skipping. Missing: %s",
             ", ".join(missing),
         )
         return
 
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, send_fn, to_email, *args)
+
+
+# ── Interest / pre-registration email ────────────────────────────────────
+
+
+def _build_message(sender: str, to_email: str) -> MIMEMultipart:
+    message = MIMEMultipart("alternative")
+    message["Subject"] = f"{EVENT_NAME} – registrujeme váš záujem"
+    message["From"] = sender
+    message["To"] = to_email
+
+    text_body = f"""\
+Dobrý deň,
+
+ďakujeme za váš záujem o {EVENT_NAME}.
+Vašu e-mailovú adresu ({to_email}) sme si zaznamenali.
+
+Akonáhle otvoríme prihlasovanie, budeme vás informovať medzi prvými.
+
+{SIGNATURE_TEXT}"""
+
+    html_body = f"""\
+{HTML_OPEN}      <p>Dobrý deň,</p>
+
+      <p>
+        ďakujeme za váš záujem o <strong>{EVENT_NAME}</strong>.
+        Vašu e-mailovú adresu <strong>{to_email}</strong> sme si zaznamenali.
+      </p>
+
+      <p>Akonáhle otvoríme prihlasovanie, budeme vás informovať medzi prvými.</p>
+
+{SIGNATURE_HTML}{HTML_CLOSE}"""
+
+    message.attach(MIMEText(text_body, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
+    return message
+
+
+def _send_via_smtp(to_email: str) -> None:
+    settings = get_settings()
+    _smtp_send(_build_message(settings.gmail_user, to_email))
+
+
+async def send_registration_confirmation(to_email: str) -> None:
+    logger.debug("[email] send_registration_confirmation called for %s", to_email)
     try:
-        loop = asyncio.get_event_loop()
-        logger.debug("[email] dispatching to thread executor...")
-        await loop.run_in_executor(None, _send_via_smtp, to_email)
+        await _dispatch(_send_via_smtp, to_email)
         logger.info("[email] Confirmation email sent to %s", to_email)
     except Exception:
         logger.exception("[email] Unexpected error sending confirmation email to %s", to_email)
         raise
 
 
+# ── Full registration confirmation ───────────────────────────────────────
+
+
 def _build_full_registration_message(
     sender: str, to_email: str, registrant_name: str, attendee_count: int, update_link: str
 ) -> MIMEMultipart:
     message = MIMEMultipart("alternative")
-    message["Subject"] = "Detský biblický tábor – potvrdenie registrácie"
+    message["Subject"] = f"{EVENT_NAME} – potvrdenie prihlášky"
     message["From"] = sender
     message["To"] = to_email
 
-    # Build attendee count line only if there are attendees (not for "only_me" type)
     if attendee_count > 0:
         attendee_word = "účastníkov" if attendee_count != 1 else "účastníka"
-        attendee_line_text = f"Prihlásili ste {attendee_count} {attendee_word}.\n"
-        attendee_line_html = f"        Prihlásili ste <strong>{attendee_count} {attendee_word}</strong>.\n"
+        attendee_line_text = f"Okrem seba ste prihlásili {attendee_count} {attendee_word}.\n"
+        attendee_line_html = (
+            f'      <p>Okrem seba ste prihlásili <strong>{attendee_count} {attendee_word}</strong>.</p>\n'
+        )
     else:
         attendee_line_text = ""
         attendee_line_html = ""
 
     text_body = f"""\
-Ahoj {registrant_name},
+Dobrý deň, {registrant_name},
 
-Vaša registrácia na Detský biblický tábor bola úspešne prijatá.
+vašu prihlášku na {EVENT_NAME} sme prijali.
 {attendee_line_text}
-Čoskoro sa vám ozveme s ďalšími informáciami o platbe a programe.
+Termín: {EVENT_DATES}
+Miesto: {EVENT_PLACE}
 
-Pre úpravu alebo zrušenie registrácie použite tento odkaz:
+Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.
+
+Informácie k úhrade vám pošleme v samostatnom e-maile.
+
+Prihlášku môžete kedykoľvek upraviť alebo zrušiť cez tento odkaz:
 {update_link}
 
-Za prípravný tím
-S. Alexovič
-"""
+{SIGNATURE_TEXT}"""
 
     html_body = f"""\
-<html>
-  <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
-    <div style="max-width: 600px;">
-      <p>Ahoj <strong>{registrant_name}</strong>,</p>
+{HTML_OPEN}      <p>Dobrý deň, <strong>{registrant_name}</strong>,</p>
+
+      <p>vašu prihlášku na <strong>{EVENT_NAME}</strong> sme prijali.</p>
+
+{attendee_line_html}
+      <table style="border-collapse: collapse; margin: 1.25rem 0;">
+        <tr>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Termín:</td>
+          <td style="padding: 4px 0;"><strong>{EVENT_DATES}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Miesto:</td>
+          <td style="padding: 4px 0;"><strong>{EVENT_PLACE}</strong></td>
+        </tr>
+      </table>
+
+      <p>Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.</p>
+
+      <p>Informácie k úhrade vám pošleme v samostatnom e-maile.</p>
 
       <p>
-        Vaša registrácia na <strong>Detský biblický tábor</strong> bola úspešne prijatá.
-{attendee_line_html}      </p>
-
-      <p>
-        Čoskoro sa vám ozveme s ďalšími informáciami o platbe a programe.
-      </p>
-
-      <p>
-        Pre úpravu alebo zrušenie registrácie použite tento odkaz:<br>
+        Prihlášku môžete kedykoľvek upraviť alebo zrušiť cez tento odkaz:<br>
         <a href="{update_link}">{update_link}</a>
       </p>
 
-      <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
-        Za prípravný tím<br>
-        S. Alexovič
-      </p>
-    </div>
-  </body>
-</html>
-"""
+{SIGNATURE_HTML}{HTML_CLOSE}"""
 
     message.attach(MIMEText(text_body, "plain", "utf-8"))
     message.attach(MIMEText(html_body, "html", "utf-8"))
@@ -176,55 +212,21 @@ S. Alexovič
 def _send_full_registration_via_smtp(
     to_email: str, registrant_name: str, attendee_count: int, update_link: str
 ) -> None:
-    """Send full registration confirmation via Gmail SMTP."""
-    logger.debug(
-        "[email] _send_full_registration_via_smtp: start, to=%s, name=%s, attendees=%d",
-        to_email,
-        registrant_name,
-        attendee_count,
-    )
     settings = get_settings()
-    mime_message = _build_full_registration_message(
-        settings.gmail_user, to_email, registrant_name, attendee_count, update_link
+    _smtp_send(
+        _build_full_registration_message(
+            settings.gmail_user, to_email, registrant_name, attendee_count, update_link
+        )
     )
-    _smtp_send(mime_message)
 
 
 async def send_full_registration_confirmation(
     to_email: str, registrant_name: str, attendee_count: int, update_link: str
 ) -> None:
     logger.debug("[email] send_full_registration_confirmation called for %s", to_email)
-    settings = get_settings()
-
-    if not settings.email_enabled:
-        logger.info("[email] EMAIL_ENABLED=false – skipping send to %s", to_email)
-        return
-
-    missing = [
-        k
-        for k, v in {
-            "GMAIL_USER": settings.gmail_user,
-            "GMAIL_APP_PASSWORD": settings.gmail_app_password,
-        }.items()
-        if not v
-    ]
-    if missing:
-        logger.warning(
-            "[email] Gmail credentials not configured – skipping. Missing: %s",
-            ", ".join(missing),
-        )
-        return
-
     try:
-        loop = asyncio.get_event_loop()
-        logger.debug("[email] dispatching to thread executor...")
-        await loop.run_in_executor(
-            None,
-            _send_full_registration_via_smtp,
-            to_email,
-            registrant_name,
-            attendee_count,
-            update_link,
+        await _dispatch(
+            _send_full_registration_via_smtp, to_email, registrant_name, attendee_count, update_link
         )
         logger.info("[email] Full registration confirmation email sent to %s", to_email)
     except Exception:
@@ -247,7 +249,7 @@ def _build_payment_info_message(
     qr_png_bytes: bytes | None = None,
 ) -> MIMEMultipart:
     outer = MIMEMultipart("related")
-    outer["Subject"] = "Detský biblický tábor – informácie o platbe"
+    outer["Subject"] = f"{EVENT_NAME} – informácie o platbe"
     outer["From"] = sender
     outer["To"] = to_email
 
@@ -259,60 +261,56 @@ def _build_payment_info_message(
             '<p style="margin: 1.5rem 0 0.5rem;">'
             '<img src="cid:qrcode" alt="Pay by Square QR kód" width="200" height="200">'
             "</p>"
-            '<p style="color: #888; font-size: 0.85rem; margin: 0;">Oskenujte v svojej bankovej aplikácii</p>'
+            '<p style="color: #9ca3af; font-size: 0.85rem; margin: 0;">'
+            "Oskenujte vo svojej bankovej aplikácii</p>"
         )
         if qr_png_bytes
         else ""
     )
 
     text_body = f"""\
-Ahoj {registrant_name},
+Dobrý deň, {registrant_name},
 
-ďakujeme za registráciu na Detský biblický tábor.
+ďakujeme za prihlášku na {EVENT_NAME}.
 
-Pre dokončenie registrácie prosíme uhradiť učastnícky poplatok:
+Prihlášku prosíme uhradiť nasledovne:
 
-  Suma:              {amount} EUR
-  IBAN:              {iban}
-  Banka:             {bank_name}
-  Variabilný symbol: {variable_symbol}
+  Suma:                {amount} EUR
+  IBAN:                {iban}
+  Banka:               {bank_name}
+  Variabilný symbol:   {variable_symbol}
   Správa pre príjemcu: {recipient_note}
 
 Po prijatí platby vás budeme informovať e-mailom.
 
-Za prípravný tím
-S. Alexovič
-"""
+{SIGNATURE_TEXT}"""
 
     html_body = f"""\
-<html>
-  <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
-    <div style="max-width: 600px;">
-      <p>Ahoj <strong>{registrant_name}</strong>,</p>
+{HTML_OPEN}      <p>Dobrý deň, <strong>{registrant_name}</strong>,</p>
 
-      <p>ďakujeme za registráciu na <strong>Detský biblický tábor</strong>.</p>
+      <p>ďakujeme za prihlášku na <strong>{EVENT_NAME}</strong>.</p>
 
-      <p>Pre dokončenie registrácie prosíme uhradiť učastnícky poplatok:</p>
+      <p>Prihlášku prosíme uhradiť nasledovne:</p>
 
       <table style="border-collapse: collapse; margin: 1rem 0;">
         <tr>
-          <td style="padding: 4px 16px 4px 0; color: #666;">Suma:</td>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Suma:</td>
           <td style="padding: 4px 0;"><strong>{amount} EUR</strong></td>
         </tr>
         <tr>
-          <td style="padding: 4px 16px 4px 0; color: #666;">IBAN:</td>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">IBAN:</td>
           <td style="padding: 4px 0; font-family: monospace;"><strong>{iban}</strong></td>
         </tr>
         <tr>
-          <td style="padding: 4px 16px 4px 0; color: #666;">Banka:</td>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Banka:</td>
           <td style="padding: 4px 0;">{bank_name}</td>
         </tr>
         <tr>
-          <td style="padding: 4px 16px 4px 0; color: #666;">Variabilný symbol:</td>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Variabilný symbol:</td>
           <td style="padding: 4px 0;"><strong>{variable_symbol}</strong></td>
         </tr>
         <tr>
-          <td style="padding: 4px 16px 4px 0; color: #666;">Správa pre príjemcu:</td>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Správa pre príjemcu:</td>
           <td style="padding: 4px 0;">{recipient_note}</td>
         </tr>
       </table>
@@ -321,14 +319,7 @@ S. Alexovič
 
       <p style="margin-top: 1.5rem;">Po prijatí platby vás budeme informovať e-mailom.</p>
 
-      <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
-        Za prípravný tím<br>
-        S. Alexovič
-      </p>
-    </div>
-  </body>
-</html>
-"""
+{SIGNATURE_HTML}{HTML_CLOSE}"""
 
     alt.attach(MIMEText(text_body, "plain", "utf-8"))
     alt.attach(MIMEText(html_body, "html", "utf-8"))
@@ -353,18 +344,19 @@ def _send_payment_info_via_smtp(
     qr_png_bytes: bytes | None,
 ) -> None:
     settings = get_settings()
-    mime_message = _build_payment_info_message(
-        settings.gmail_user,
-        to_email,
-        registrant_name,
-        iban,
-        bank_name,
-        amount,
-        variable_symbol,
-        recipient_note,
-        qr_png_bytes,
+    _smtp_send(
+        _build_payment_info_message(
+            settings.gmail_user,
+            to_email,
+            registrant_name,
+            iban,
+            bank_name,
+            amount,
+            variable_symbol,
+            recipient_note,
+            qr_png_bytes,
+        )
     )
-    _smtp_send(mime_message)
 
 
 async def send_payment_info_email(
@@ -378,20 +370,8 @@ async def send_payment_info_email(
     qr_png_bytes: bytes | None = None,
     attendee_count: int = 0,  # kept for backward compat, unused
 ) -> None:
-    settings = get_settings()
-
-    if not settings.email_enabled:
-        logger.info("[email] EMAIL_ENABLED=false – skipping payment info email to %s", to_email)
-        return
-
-    if not all([settings.gmail_user, settings.gmail_app_password]):
-        logger.warning("[email] Gmail credentials not configured – skipping payment info email.")
-        return
-
     try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None,
+        await _dispatch(
             _send_payment_info_via_smtp,
             to_email,
             registrant_name,
@@ -415,96 +395,65 @@ def _build_sub_attendee_notification_message(
     sender: str, to_email: str, attendee_name: str, registered_by_name: str
 ) -> MIMEMultipart:
     message = MIMEMultipart("alternative")
-    message["Subject"] = "Detský biblický tábor – potvrdenie účasti"
+    message["Subject"] = f"{EVENT_NAME} – potvrdenie účasti"
     message["From"] = sender
     message["To"] = to_email
 
     text_body = f"""\
-Ahoj {attendee_name},
+Dobrý deň, {attendee_name},
 
-Potvrdzujeme, že ste boli zaregistrovaný/á na Detský biblický tábor.
-Registráciu vykonal/a: {registered_by_name}
+potvrdzujeme, že ste prihlásený/á na {EVENT_NAME}.
+Prihlášku podal/a: {registered_by_name}
 
-Za prípravný tím
-S. Alexovič
-"""
+Termín: {EVENT_DATES}
+Miesto: {EVENT_PLACE}
+
+{SIGNATURE_TEXT}"""
 
     html_body = f"""\
-<html>
-  <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
-    <div style="max-width: 600px;">
-      <p>Ahoj <strong>{attendee_name}</strong>,</p>
+{HTML_OPEN}      <p>Dobrý deň, <strong>{attendee_name}</strong>,</p>
 
-      <p>
-        Potvrdzujeme, že ste boli zaregistrovaný/á na <strong>Detský biblický tábor</strong>.
-      </p>
+      <p>potvrdzujeme, že ste prihlásený/á na <strong>{EVENT_NAME}</strong>.</p>
 
-      <p>
-        Registráciu vykonal/a: <strong>{registered_by_name}</strong>
-      </p>
+      <p>Prihlášku podal/a: <strong>{registered_by_name}</strong></p>
 
-       <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
-        Za prípravný tím<br>
-        S. Alexovič
-      </p>
-    </div>
-  </body>
-</html>
-"""
+      <table style="border-collapse: collapse; margin: 1.25rem 0;">
+        <tr>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Termín:</td>
+          <td style="padding: 4px 0;"><strong>{EVENT_DATES}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Miesto:</td>
+          <td style="padding: 4px 0;"><strong>{EVENT_PLACE}</strong></td>
+        </tr>
+      </table>
+
+{SIGNATURE_HTML}{HTML_CLOSE}"""
 
     message.attach(MIMEText(text_body, "plain", "utf-8"))
     message.attach(MIMEText(html_body, "html", "utf-8"))
     return message
 
 
-def _send_sub_attendee_notification_via_smtp(to_email: str, attendee_name: str, registered_by_name: str) -> None:
-    """Send sub-attendee notification via Gmail SMTP."""
-    logger.debug(
-        "[email] _send_sub_attendee_notification_via_smtp: start, to=%s, attendee=%s, registered_by=%s",
-        to_email,
-        attendee_name,
-        registered_by_name,
-    )
+def _send_sub_attendee_notification_via_smtp(
+    to_email: str, attendee_name: str, registered_by_name: str
+) -> None:
     settings = get_settings()
-    mime_message = _build_sub_attendee_notification_message(
-        settings.gmail_user, to_email, attendee_name, registered_by_name
-    )
-    _smtp_send(mime_message)
-
-
-async def send_sub_attendee_notification(to_email: str, attendee_name: str, registered_by_name: str) -> None:
-    """Send notification email to sub-attendee informing them they were registered."""
-    logger.debug("[email] send_sub_attendee_notification called for %s", to_email)
-    settings = get_settings()
-
-    if not settings.email_enabled:
-        logger.info("[email] EMAIL_ENABLED=false – skipping send to %s", to_email)
-        return
-
-    missing = [
-        k
-        for k, v in {
-            "GMAIL_USER": settings.gmail_user,
-            "GMAIL_APP_PASSWORD": settings.gmail_app_password,
-        }.items()
-        if not v
-    ]
-    if missing:
-        logger.warning(
-            "[email] Gmail credentials not configured – skipping. Missing: %s",
-            ", ".join(missing),
+    _smtp_send(
+        _build_sub_attendee_notification_message(
+            settings.gmail_user, to_email, attendee_name, registered_by_name
         )
-        return
+    )
 
+
+async def send_sub_attendee_notification(
+    to_email: str, attendee_name: str, registered_by_name: str
+) -> None:
+    """Send notification email to a sub-attendee informing them they were registered."""
+    logger.debug("[email] send_sub_attendee_notification called for %s", to_email)
     try:
-        loop = asyncio.get_event_loop()
-        logger.debug("[email] dispatching to thread executor...")
-        await loop.run_in_executor(
-            None,
-            _send_sub_attendee_notification_via_smtp,
-            to_email,
-            attendee_name,
-            registered_by_name,
+        await _dispatch(
+            _send_sub_attendee_notification_via_smtp, to_email, attendee_name, registered_by_name
         )
         logger.info("[email] Sub-attendee notification email sent to %s", to_email)
     except Exception:
@@ -519,42 +468,34 @@ def _build_payment_received_message(
     sender: str, to_email: str, registrant_name: str, variable_symbol: str
 ) -> MIMEMultipart:
     message = MIMEMultipart("alternative")
-    message["Subject"] = "Detský biblický tábor – platba prijatá"
+    message["Subject"] = f"{EVENT_NAME} – platba prijatá"
     message["From"] = sender
     message["To"] = to_email
 
     text_body = f"""\
-Ahoj {registrant_name},
+Dobrý deň, {registrant_name},
 
-Vaša platba za Detský biblický tábor bola prijatá (variabilný symbol: {variable_symbol}).
+vašu platbu za {EVENT_NAME} sme prijali (variabilný symbol: {variable_symbol}).
 
-Vaša registrácia je teraz potvrdená. Tešíme sa na vás!
+Vaša prihláška je tým potvrdená. Pred pobytom vám pošleme ešte podrobné
+informácie k programu. Tešíme sa na vás!
 
-Za prípravný tím
-S. Alexovič
-"""
+{SIGNATURE_TEXT}"""
 
     html_body = f"""\
-<html>
-  <body style="font-family: sans-serif; color: #333; margin: 0; padding: 0;">
-    <div style="max-width: 600px;">
-      <p>Ahoj <strong>{registrant_name}</strong>,</p>
+{HTML_OPEN}      <p>Dobrý deň, <strong>{registrant_name}</strong>,</p>
 
       <p>
-        Vaša platba za <strong>Detský biblický tábor</strong> bola úspešne prijatá
+        vašu platbu za <strong>{EVENT_NAME}</strong> sme prijali
         (variabilný symbol: <strong>{variable_symbol}</strong>).
       </p>
 
-      <p>Vaša registrácia je teraz potvrdená. Tešíme sa na vás!</p>
-
-      <p style="margin-top: 2rem; color: #888; font-size: 0.9rem;">
-        Za prípravný tím<br>
-        S. Alexovič
+      <p>
+        Vaša prihláška je tým potvrdená. Pred pobytom vám pošleme ešte podrobné
+        informácie k programu. Tešíme sa na vás!
       </p>
-    </div>
-  </body>
-</html>
-"""
+
+{SIGNATURE_HTML}{HTML_CLOSE}"""
 
     message.attach(MIMEText(text_body, "plain", "utf-8"))
     message.attach(MIMEText(html_body, "html", "utf-8"))
@@ -562,46 +503,17 @@ S. Alexovič
 
 
 def _send_payment_received_via_smtp(to_email: str, registrant_name: str, variable_symbol: str) -> None:
-    logger.debug("[email] _send_payment_received_via_smtp: start, to=%s", to_email)
     settings = get_settings()
-    mime_message = _build_payment_received_message(settings.gmail_user, to_email, registrant_name, variable_symbol)
-    _smtp_send(mime_message)
+    _smtp_send(
+        _build_payment_received_message(settings.gmail_user, to_email, registrant_name, variable_symbol)
+    )
 
 
 async def send_payment_received_confirmation(to_email: str, registrant_name: str, variable_symbol: str) -> None:
     """Send confirmation email to registrant when admin marks payment as received."""
     logger.debug("[email] send_payment_received_confirmation called for %s", to_email)
-    settings = get_settings()
-
-    if not settings.email_enabled:
-        logger.info("[email] EMAIL_ENABLED=false – skipping send to %s", to_email)
-        return
-
-    missing = [
-        k
-        for k, v in {
-            "GMAIL_USER": settings.gmail_user,
-            "GMAIL_APP_PASSWORD": settings.gmail_app_password,
-        }.items()
-        if not v
-    ]
-    if missing:
-        logger.warning(
-            "[email] Gmail credentials not configured – skipping. Missing: %s",
-            ", ".join(missing),
-        )
-        return
-
     try:
-        loop = asyncio.get_event_loop()
-        logger.debug("[email] dispatching to thread executor...")
-        await loop.run_in_executor(
-            None,
-            _send_payment_received_via_smtp,
-            to_email,
-            registrant_name,
-            variable_symbol,
-        )
+        await _dispatch(_send_payment_received_via_smtp, to_email, registrant_name, variable_symbol)
         logger.info("[email] Payment received confirmation sent to %s", to_email)
     except Exception:
         logger.exception("[email] Unexpected error sending payment received email to %s", to_email)

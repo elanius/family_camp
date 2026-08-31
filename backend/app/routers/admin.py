@@ -1,7 +1,6 @@
 import io
 import logging
 import random
-from datetime import date
 from typing import Literal
 
 from bson import ObjectId
@@ -67,6 +66,7 @@ def _doc_to_item(doc: dict) -> AdminRegistrationItem:
         registrant=doc["registrant"],
         attendees=doc.get("attendees", []),
         note=doc.get("note"),
+        extra_contribution=doc.get("extra_contribution", 0),
         status=_effective_status(doc),
         registered_at=doc["registered_at"],
         update_token=doc.get("update_token", ""),
@@ -76,42 +76,18 @@ def _doc_to_item(doc: dict) -> AdminRegistrationItem:
 
 # ── Pricing (mirrors frontend pricing.ts) ───────────────────────────────
 
-_LATE_FROM = date(2026, 7, 1)
-_BASE_PRICE = {"baby": 0, "kid": 130, "adult": 150}
-_LATE_FEE = 10
-_KID_SIBLING_DISCOUNT = 20
+_ACCOMMODATION_PRICE = {"double": 179, "single": 219, "none": 0}
 
 
-def _age_category(age: int) -> str:
-    if age <= 3:
-        return "baby"
-    if age <= 14:
-        return "kid"
-    return "adult"
-
-
-def _calculate_total_amount(registrant: dict, attendees: list[dict]) -> int:
-    # Late prices are turned off (mirrors frontend pricing.ts isLate()).
-    is_late = False  # date.today() >= _LATE_FROM
-    all_ages: list[int] = []
-    if registrant.get("is_attendee") and registrant.get("age") is not None:
-        all_ages.append(int(registrant["age"]))
-    for a in attendees:
-        if a.get("age") is not None:
-            all_ages.append(int(a["age"]))
+def _calculate_total_amount(
+    registrant: dict, attendees: list[dict], extra_contribution: int = 0
+) -> int:
     total = 0
-    kid_count = 0
-    for age in all_ages:
-        cat = _age_category(age)
-        base = _BASE_PRICE[cat]
-        fee = _LATE_FEE if (is_late and base > 0) else 0
-        discount = 0
-        if cat == "kid":
-            if kid_count > 0:
-                discount = _KID_SIBLING_DISCOUNT
-            kid_count += 1
-        total += max(0, base + fee - discount)
-    return total
+    if registrant.get("is_attendee") and registrant.get("accommodation"):
+        total += _ACCOMMODATION_PRICE.get(registrant["accommodation"], 0)
+    for a in attendees:
+        total += _ACCOMMODATION_PRICE.get(a.get("accommodation"), 0)
+    return total + max(0, int(extra_contribution or 0))
 
 
 async def _ensure_variable_symbol(collection, oid: ObjectId, doc: dict) -> str:
@@ -264,7 +240,9 @@ async def get_payment_info(
     settings = get_settings()
     vs = await _ensure_variable_symbol(collection, oid, doc)
     registrant = doc["registrant"]
-    amount = _calculate_total_amount(registrant, doc.get("attendees", []))
+    amount = _calculate_total_amount(
+        registrant, doc.get("attendees", []), doc.get("extra_contribution", 0)
+    )
     full_name = f"{registrant['name']} {registrant['surname']}"
     recipient_note = f"{full_name} {vs}"
     qr_string = _generate_bysquare_string(settings.bank_iban, amount, vs, recipient_note, settings.bank_beneficiary)

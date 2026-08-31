@@ -1,18 +1,32 @@
+import { Link } from "react-router-dom";
+import {
+  EVENT_CITY,
+  EVENT_DATES,
+  EVENT_NAME,
+  EVENT_VENUE,
+  EVENT_YEAR,
+} from "../eventInfo";
+
 export default function HeroSection() {
   return (
     <section className="hero">
-      <span className="hero__eyebrow">ECAV Obišovce · Leto 2026</span>
-      <h1 className="hero__title">
-        Detský biblický tábor
-        <span className="hero__camp_name">V záhrade Kráľa</span>
-      </h1>
-      <p className="hero__subtitle">
-        Týždeň plný hier, dobrodružstiev a Božieho slova pre deti v krásnom prírodnom prostredí.
-      </p>
-      <div className="hero__badges">
-        <span className="badge">📅 26. – 31. júla 2026</span>
-        <span className="badge">✝️ Biblický program</span>
-        <span className="badge">👧 0 – 14 rokov</span>
+      <div className="hero__inner">
+        <span className="hero__eyebrow">EVS · {EVENT_YEAR}</span>
+        <h1 className="hero__title">{EVENT_NAME}</h1>
+        <p className="hero__lead">
+          Víkend nad otvorenou Bibliou — v spoločenstve, ktoré spolu študuje,
+          modlí sa a hľadí dopredu.
+        </p>
+        <div className="hero__meta">
+          <span className="hero__meta-item">{EVENT_DATES}</span>
+          <span className="hero__meta-divider" aria-hidden="true" />
+          <span className="hero__meta-item">
+            {EVENT_VENUE}, {EVENT_CITY}
+          </span>
+        </div>
+        <Link to="/registration" className="hero__cta">
+          Prihlásiť sa
+        </Link>
       </div>
     </section>
   );

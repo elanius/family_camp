@@ -1,25 +1,35 @@
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { calculatePrice, CATEGORY_LABEL } from "../utils/pricing";
+import {
+  ACCOMMODATION_LABEL,
+  calculatePrice,
+  type Accommodation,
+} from "../utils/pricing";
+import { EVENT_SUBTITLE } from "../eventInfo";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 type RegistrationType = "me_and_others" | "just_others" | "only_me";
 
 interface RegistrantPayload {
   name: string;
   surname: string;
-  age?: number;
   phone: string;
   email: string;
   is_attendee: boolean;
-  transportation: "individual" | "train_with_organizer";
+  accommodation?: Accommodation;
+  recreation_voucher?: boolean;
+  roommate_preference?: string;
 }
 
 interface AttendeePayload {
   name: string;
   surname: string;
-  age: number;
+  accommodation: Accommodation;
   phone?: string;
   email?: string;
+  recreation_voucher?: boolean;
+  roommate_preference?: string;
 }
 
 interface RegistrationPayload {
@@ -27,6 +37,7 @@ interface RegistrationPayload {
   registrant: RegistrantPayload;
   attendees: AttendeePayload[];
   note?: string;
+  extra_contribution: number;
 }
 
 interface LocationState {
@@ -44,30 +55,40 @@ export default function RegistrationSummaryPage() {
   const state = location.state as LocationState | null;
 
   if (!state?.payload) {
-    return <Navigate to="/form" replace />;
+    return <Navigate to="/registration" replace />;
   }
 
   const { payload } = state;
   const { registrant, attendees } = payload;
 
-  // Build list of attendees used for pricing
-  const pricingAttendees: { name: string; surname: string; age: number }[] = [];
-  if (registrant.is_attendee && registrant.age !== undefined) {
-    pricingAttendees.push({
+  const pricePeople: {
+    name: string;
+    surname: string;
+    accommodation: Accommodation;
+  }[] = [];
+  if (registrant.is_attendee && registrant.accommodation) {
+    pricePeople.push({
       name: registrant.name,
       surname: registrant.surname,
-      age: registrant.age,
+      accommodation: registrant.accommodation,
     });
   }
   for (const a of attendees) {
-    pricingAttendees.push({ name: a.name, surname: a.surname, age: a.age });
+    pricePeople.push({
+      name: a.name,
+      surname: a.surname,
+      accommodation: a.accommodation,
+    });
   }
-  const priceBreakdown = calculatePrice(pricingAttendees);
+  const priceBreakdown = calculatePrice(
+    pricePeople,
+    payload.extra_contribution,
+  );
 
   async function handleRegister() {
     setStatus("loading");
     try {
-      const res = await fetch("/api/registration", {
+      const res = await fetch(`${API_BASE}/api/registration`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -90,12 +111,13 @@ export default function RegistrationSummaryPage() {
       <main className="reg-form-page">
         <div className="reg-form-page__inner">
           <div className="reg-form-page__success">
-            <p className="reg-form-page__success-icon">✅</p>
             <h1 className="reg-form-page__success-title">
-              Registrácia prebehla úspešne!
+              Prihláška bola odoslaná
             </h1>
             <p className="reg-form-page__success-text">
-              Potvrdenie sme zaslali na váš e-mail. Tešíme sa na vás na tábore!
+              Potvrdenie sme zaslali na váš e-mail spolu s odkazom, cez ktorý
+              môžete prihlášku kedykoľvek upraviť. Informácie k úhrade vám
+              pošleme v samostatnom e-maile. Tešíme sa na vás!
             </p>
             <button
               className="reg-form__submit"
@@ -110,18 +132,15 @@ export default function RegistrationSummaryPage() {
     );
   }
 
-  const registrantSectionLabel =
-    payload.registration_type === "just_others"
-      ? "Kontaktná osoba (platiteľ)"
-      : "Účastník (platiteľ)";
+  const registrantSectionLabel = registrant.is_attendee
+    ? "Účastník (platiteľ)"
+    : "Kontaktná osoba (platiteľ)";
 
   return (
     <main className="reg-form-page">
       <div className="reg-form-page__inner">
-        <h1 className="reg-form-page__title">Zhrnutie registrácie</h1>
-        <p className="reg-form-page__subtitle">
-          Detský biblický tábor · ECAV Obišovce · 26.–31. júla 2026
-        </p>
+        <h1 className="reg-form-page__title">Zhrnutie prihlášky</h1>
+        <p className="reg-form-page__subtitle">{EVENT_SUBTITLE}</p>
 
         {/* ── Registrant ──────────────────────────────── */}
         <section className="summary-section">
@@ -133,14 +152,6 @@ export default function RegistrationSummaryPage() {
                 {registrant.name} {registrant.surname}
               </span>
             </div>
-            {registrant.age !== undefined && (
-              <div className="summary-card__row">
-                <span className="summary-card__label">Vek</span>
-                <span className="summary-card__value">
-                  {registrant.age} rokov
-                </span>
-              </div>
-            )}
             <div className="summary-card__row">
               <span className="summary-card__label">Telefón</span>
               <span className="summary-card__value">{registrant.phone}</span>
@@ -149,14 +160,28 @@ export default function RegistrationSummaryPage() {
               <span className="summary-card__label">E-mail</span>
               <span className="summary-card__value">{registrant.email}</span>
             </div>
-            <div className="summary-card__row">
-              <span className="summary-card__label">Doprava</span>
-              <span className="summary-card__value">
-                {registrant.transportation === "individual"
-                  ? "Individuálna doprava"
-                  : "Doprava vlakom s organizátorom"}
-              </span>
-            </div>
+            {registrant.accommodation && (
+              <div className="summary-card__row">
+                <span className="summary-card__label">Ubytovanie a strava</span>
+                <span className="summary-card__value">
+                  {ACCOMMODATION_LABEL[registrant.accommodation]}
+                </span>
+              </div>
+            )}
+            {registrant.roommate_preference && (
+              <div className="summary-card__row">
+                <span className="summary-card__label">Spolubývajúci</span>
+                <span className="summary-card__value">
+                  {registrant.roommate_preference}
+                </span>
+              </div>
+            )}
+            {registrant.recreation_voucher && (
+              <div className="summary-card__row">
+                <span className="summary-card__label">Rekreačný poukaz</span>
+                <span className="summary-card__value">Áno, mám záujem</span>
+              </div>
+            )}
           </div>
         </section>
 
@@ -178,9 +203,25 @@ export default function RegistrationSummaryPage() {
                   </span>
                 </div>
                 <div className="summary-card__row">
-                  <span className="summary-card__label">Vek</span>
-                  <span className="summary-card__value">{a.age} rokov</span>
+                  <span className="summary-card__label">Ubytovanie a strava</span>
+                  <span className="summary-card__value">
+                    {ACCOMMODATION_LABEL[a.accommodation]}
+                  </span>
                 </div>
+                {a.roommate_preference && (
+                  <div className="summary-card__row">
+                    <span className="summary-card__label">Spolubývajúci</span>
+                    <span className="summary-card__value">
+                      {a.roommate_preference}
+                    </span>
+                  </div>
+                )}
+                {a.recreation_voucher && (
+                  <div className="summary-card__row">
+                    <span className="summary-card__label">Rekreačný poukaz</span>
+                    <span className="summary-card__value">Áno, má záujem</span>
+                  </div>
+                )}
                 {a.phone && (
                   <div className="summary-card__row">
                     <span className="summary-card__label">Telefón</span>
@@ -203,9 +244,7 @@ export default function RegistrationSummaryPage() {
           <section className="summary-section">
             <h2 className="summary-section__title">Poznámka</h2>
             <div className="summary-card">
-              <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>
-                {payload.note}
-              </p>
+              <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{payload.note}</p>
             </div>
           </section>
         )}
@@ -213,7 +252,8 @@ export default function RegistrationSummaryPage() {
         {/* ── Price breakdown ─────────────────────────── */}
         <div className="price-preview price-preview--final">
           <h2 className="price-preview__title">Cena</h2>
-          {priceBreakdown.items.length === 0 ? (
+          {priceBreakdown.items.length === 0 &&
+          priceBreakdown.extraContribution === 0 ? (
             <p className="price-preview__empty">Žiadni účastníci.</p>
           ) : (
             <>
@@ -221,22 +261,23 @@ export default function RegistrationSummaryPage() {
                 {priceBreakdown.items.map((item, i) => (
                   <li key={i} className="price-preview__item">
                     <span className="price-preview__item-label">
-                      {item.name} ({item.age} r.) –{" "}
-                      {CATEGORY_LABEL[item.category]}
-                      {item.discount > 0 && (
-                        <span className="price-preview__discount">
-                          {" "}
-                          &minus;{item.discount}&nbsp;€
-                        </span>
-                      )}
+                      {item.name} – {ACCOMMODATION_LABEL[item.accommodation]}
                     </span>
                     <span className="price-preview__item-price">
-                      {item.finalPrice === 0
-                        ? "zdarma"
-                        : `${item.finalPrice}\u00a0€`}
+                      {item.price === 0 ? "bez poplatku" : `${item.price} €`}
                     </span>
                   </li>
                 ))}
+                {priceBreakdown.extraContribution > 0 && (
+                  <li className="price-preview__item">
+                    <span className="price-preview__item-label">
+                      Dobrovoľný príspevok
+                    </span>
+                    <span className="price-preview__item-price">
+                      {priceBreakdown.extraContribution}&nbsp;€
+                    </span>
+                  </li>
+                )}
               </ul>
               <div className="price-preview__total">
                 <span>Celková suma</span>
@@ -249,13 +290,13 @@ export default function RegistrationSummaryPage() {
         {/* ── Actions ─────────────────────────────────── */}
         {status === "error" && (
           <p className="reg-form__submit-error">
-            ❌ Registrácia zlyhala. Skúste to prosím znova.
+            Odoslanie prihlášky zlyhalo. Skúste to prosím znova.
           </p>
         )}
         {status === "duplicate" && (
           <p className="reg-form__submit-error">
-            ❌ Tento e-mail je už zaregistrovaný. Pre úpravu registrácie použite
-            odkaz, ktorý ste dostali v potvrdzovacom e-maile.
+            Tento e-mail je už prihlásený. Pre úpravu prihlášky použite odkaz,
+            ktorý ste dostali v potvrdzovacom e-maile.
           </p>
         )}
 
@@ -274,7 +315,7 @@ export default function RegistrationSummaryPage() {
             onClick={handleRegister}
             disabled={status === "loading"}
           >
-            {status === "loading" ? "Odosielam…" : "Registrovať"}
+            {status === "loading" ? "Odosielam…" : "Odoslať prihlášku"}
           </button>
         </div>
       </div>

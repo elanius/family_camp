@@ -2,16 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../admin.css";
 import { useAdminAuth } from "../context/AdminAuthContext";
-import type { RegistrationItem, RegistrationStatus } from "../components/admin/RegistrationList";
-import { getCategory } from "../utils/pricing";
+import { toPeople, type RegistrationItem, type RegistrationStatus } from "../components/admin/RegistrationList";
+import { ACCOMMODATION_LABEL } from "../utils/pricing";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
-
-const CATEGORY_SHORT: Record<ReturnType<typeof getCategory>, string> = {
-  baby: "Baby",
-  kid: "Kid",
-  adult: "Adult",
-};
 
 const STATUS_LABELS: Record<RegistrationStatus, string> = {
   new: "New",
@@ -26,8 +20,9 @@ const STATUS_LABELS: Record<RegistrationStatus, string> = {
 interface AttendeeRow {
   name: string;
   surname: string;
-  age: number;
-  category: string;
+  accommodation: string;
+  voucher: string;
+  roommate: string;
   // Contact = the registrant of the group this attendee belongs to
   contactName: string;
   contactEmail: string;
@@ -40,14 +35,24 @@ interface AttendeeRow {
 
 type SortKey = keyof Pick<
   AttendeeRow,
-  "name" | "surname" | "age" | "category" | "contactName" | "contactEmail" | "contactPhone" | "note" | "status"
+  | "name"
+  | "surname"
+  | "accommodation"
+  | "voucher"
+  | "roommate"
+  | "contactName"
+  | "contactEmail"
+  | "contactPhone"
+  | "note"
+  | "status"
 >;
 
-const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
+const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "name", label: "Name" },
   { key: "surname", label: "Surname" },
-  { key: "age", label: "Age", numeric: true },
-  { key: "category", label: "Category" },
+  { key: "accommodation", label: "Accommodation" },
+  { key: "roommate", label: "Roommate" },
+  { key: "voucher", label: "Voucher" },
   { key: "contactName", label: "Contact" },
   { key: "contactEmail", label: "Email" },
   { key: "contactPhone", label: "Phone" },
@@ -77,35 +82,27 @@ function toRows(items: RegistrationItem[]): AttendeeRow[] {
       groupId: item.id,
     };
 
-    // The registrant attends themselves for both "me_and_others" and "only_me"
-    // registrations (both set is_attendee); "just_others" registrants don't attend.
-    if (reg.is_attendee && reg.age != null) {
-      rows.push({
-        ...base,
-        name: reg.name,
-        surname: reg.surname,
-        age: reg.age,
-        category: CATEGORY_SHORT[getCategory(reg.age)],
-        isContact: true,
-      });
-    }
+    // toPeople() puts the registrant first when they attend ("me_and_others",
+    // "only_me"); "just_others" registrants don't attend and are skipped.
+    const people = toPeople(item);
+    const registrantAttends = reg.is_attendee && !!reg.accommodation;
 
-    for (const a of item.attendees) {
+    people.forEach((p, idx) => {
       rows.push({
         ...base,
-        name: a.name,
-        surname: a.surname,
-        age: a.age,
-        category: CATEGORY_SHORT[getCategory(a.age)],
-        isContact: false,
+        name: p.name,
+        surname: p.surname,
+        accommodation: ACCOMMODATION_LABEL[p.accommodation],
+        roommate: p.roommate,
+        voucher: p.voucher ? "Yes" : "",
+        isContact: registrantAttends && idx === 0,
       });
-    }
+    });
   }
   return rows;
 }
 
-function compareRows(a: AttendeeRow, b: AttendeeRow, key: SortKey, numeric: boolean): number {
-  if (numeric) return (a[key] as number) - (b[key] as number);
+function compareRows(a: AttendeeRow, b: AttendeeRow, key: SortKey): number {
   return String(a[key]).localeCompare(String(b[key]), "sk", { sensitivity: "base" });
 }
 
@@ -154,13 +151,12 @@ export default function AttendeeTablePage() {
   const rows = useMemo(() => toRows(items), [items]);
 
   const sortedRows = useMemo(() => {
-    const numeric = COLUMNS.find((c) => c.key === sortKey)?.numeric ?? false;
     const dir = sortDir === "asc" ? 1 : -1;
     return [...rows].sort((a, b) => {
-      const primary = compareRows(a, b, sortKey, numeric);
+      const primary = compareRows(a, b, sortKey);
       if (primary !== 0) return primary * dir;
-      // Stable tiebreak: surname → name → age so groups read naturally.
-      return compareRows(a, b, "surname", false) || compareRows(a, b, "name", false) || compareRows(a, b, "age", true);
+      // Stable tiebreak: surname → name so groups read naturally.
+      return compareRows(a, b, "surname") || compareRows(a, b, "name");
     });
   }, [rows, sortKey, sortDir]);
 
@@ -205,7 +201,7 @@ export default function AttendeeTablePage() {
       <header className="bg-green-800 text-white px-6 py-4 flex items-center justify-between shadow">
         <div className="flex items-center gap-3">
           <Link to="/admin" className="text-sm text-white/70 hover:text-white transition-colors">
-            ← Camp Admin
+            ← Admin
           </Link>
           <h1 className="text-lg font-bold tracking-wide">Attendees</h1>
         </div>
@@ -282,8 +278,9 @@ export default function AttendeeTablePage() {
                   <tr key={`${r.groupId}-${idx}`} className="text-gray-700 hover:bg-gray-50 align-top">
                     <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">{r.name}</td>
                     <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">{r.surname}</td>
-                    <td className="px-4 py-2">{r.age}</td>
-                    <td className="px-4 py-2 text-gray-500 text-xs">{r.category}</td>
+                    <td className="px-4 py-2 text-gray-500 text-xs">{r.accommodation}</td>
+                    <td className="px-4 py-2 text-gray-500 text-xs">{r.roommate}</td>
+                    <td className="px-4 py-2 text-xs">{r.voucher}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{r.contactName}</td>
                     <td className="px-4 py-2">
                       <a href={`mailto:${r.contactEmail}`} className="text-green-700 hover:underline">

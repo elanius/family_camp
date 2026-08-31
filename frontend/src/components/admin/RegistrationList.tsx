@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { calculatePrice, CATEGORY_LABEL } from "../../utils/pricing";
+import {
+  ACCOMMODATION_LABEL,
+  calculatePrice,
+  type Accommodation,
+} from "../../utils/pricing";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -16,30 +20,65 @@ export type RegistrationStatus =
 export interface AttendeeData {
   name: string;
   surname: string;
-  age: number;
+  accommodation: Accommodation;
   phone?: string;
   email?: string;
+  recreation_voucher?: boolean;
+  roommate_preference?: string;
 }
 
 export interface RegistrantData {
   name: string;
   surname: string;
-  age?: number;
   phone: string;
   email: string;
   is_attendee: boolean;
-  transportation: "individual" | "train_with_organizer";
+  accommodation?: Accommodation | null;
+  recreation_voucher?: boolean;
+  roommate_preference?: string;
 }
 
 export interface RegistrationItem {
   id: string;
-  registration_type: "me_and_others" | "just_others";
+  registration_type: "me_and_others" | "just_others" | "only_me";
   registrant: RegistrantData;
   attendees: AttendeeData[];
   note?: string;
+  extra_contribution?: number;
   status: RegistrationStatus;
   registered_at: string;
   update_token: string;
+}
+
+/** People counted for the headcount and the price, in display order. */
+export function toPeople(item: RegistrationItem) {
+  const people: {
+    name: string;
+    surname: string;
+    accommodation: Accommodation;
+    voucher: boolean;
+    roommate: string;
+  }[] = [];
+  const reg = item.registrant;
+  if (reg.is_attendee && reg.accommodation) {
+    people.push({
+      name: reg.name,
+      surname: reg.surname,
+      accommodation: reg.accommodation,
+      voucher: reg.recreation_voucher ?? false,
+      roommate: reg.roommate_preference ?? "",
+    });
+  }
+  for (const a of item.attendees) {
+    people.push({
+      name: a.name,
+      surname: a.surname,
+      accommodation: a.accommodation,
+      voucher: a.recreation_voucher ?? false,
+      roommate: a.roommate_preference ?? "",
+    });
+  }
+  return people;
 }
 
 // ── Status display helpers ───────────────────────────────────────────────────
@@ -110,19 +149,11 @@ function RegistrationRow({
   const actions = STATUS_ACTIONS[item.status];
   const reg = item.registrant;
 
-  // All people attending (for headcount)
-  const totalPeople = (reg.is_attendee ? 1 : 0) + item.attendees.length;
+  const people = toPeople(item);
+  const totalPeople = people.length;
+  const voucherCount = people.filter((p) => p.voucher).length;
 
-  // Campers with known age (for pricing)
-  const campers: { name: string; surname: string; age: number }[] = [];
-  if (reg.is_attendee && reg.age != null) {
-    campers.push({ name: reg.name, surname: reg.surname, age: reg.age });
-  }
-  for (const a of item.attendees) {
-    campers.push({ name: a.name, surname: a.surname, age: a.age });
-  }
-
-  const pricing = calculatePrice(campers);
+  const pricing = calculatePrice(people, item.extra_contribution ?? 0);
 
   async function handleAction(action: Action) {
     if (action === "send_payment_info") {
@@ -194,17 +225,17 @@ function RegistrationRow({
             <div className="text-sm text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
               <span>{reg.email}</span>
               <span>{reg.phone}</span>
-              <span>
-                {reg.transportation === "individual"
-                  ? "🚗 Individual"
-                  : "🚂 Train w/ organizer"}
-              </span>
               <span className="font-medium text-gray-700">
                 {totalPeople} {totalPeople === 1 ? "person" : "people"}
               </span>
               <span className="font-semibold text-green-800">
                 €{pricing.total}
               </span>
+              {voucherCount > 0 && (
+                <span className="text-amber-700" title="Recreation voucher requested">
+                  🎟 {voucherCount}
+                </span>
+              )}
               <span className="text-gray-400">{regDate}</span>
               {item.update_token && (
                 <a
@@ -242,7 +273,7 @@ function RegistrationRow({
           </p>
         )}
 
-        {campers.length > 0 && (
+        {people.length > 0 && (
           <button
             onClick={onToggle}
             className="mt-2 text-xs text-green-700 hover:underline"
@@ -253,49 +284,60 @@ function RegistrationRow({
       </div>
 
       {/* ── Members table ── */}
-      {expanded && campers.length > 0 && (
+      {expanded && people.length > 0 && (
         <div className="border-t border-gray-100 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-xs text-gray-400 uppercase tracking-wide">
                 <th className="px-4 py-2 text-left w-8">#</th>
                 <th className="px-4 py-2 text-left">Name</th>
-                <th className="px-4 py-2 text-left">Age</th>
-                <th className="px-4 py-2 text-left">Category</th>
-                <th className="px-4 py-2 text-right">Base</th>
-                <th className="px-4 py-2 text-right">Discount</th>
+                <th className="px-4 py-2 text-left">Accommodation</th>
+                <th className="px-4 py-2 text-left">Roommate</th>
+                <th className="px-4 py-2 text-left">Voucher</th>
                 <th className="px-4 py-2 text-right">Price</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {pricing.items.map((p, idx) => (
+              {people.map((p, idx) => (
                 <tr key={idx} className="text-gray-700 hover:bg-gray-50">
                   <td className="px-4 py-2 text-gray-400 text-xs">{idx + 1}</td>
-                  <td className="px-4 py-2 font-medium">{p.name}</td>
-                  <td className="px-4 py-2">{p.age}</td>
+                  <td className="px-4 py-2 font-medium">
+                    {p.name} {p.surname}
+                  </td>
                   <td className="px-4 py-2 text-gray-500 text-xs">
-                    {CATEGORY_LABEL[p.category]}
+                    {ACCOMMODATION_LABEL[p.accommodation]}
                   </td>
-                  <td className="px-4 py-2 text-right">
-                    €{p.basePrice + p.lateFee}
+                  <td className="px-4 py-2 text-gray-500 text-xs">
+                    {p.roommate || "—"}
                   </td>
-                  <td className="px-4 py-2 text-right text-green-700">
-                    {p.discount > 0 ? `-€${p.discount}` : "—"}
+                  <td className="px-4 py-2 text-xs">
+                    {p.voucher ? "🎟 yes" : "—"}
                   </td>
                   <td className="px-4 py-2 text-right font-semibold">
-                    {p.finalPrice === 0 ? (
+                    {pricing.items[idx].price === 0 ? (
                       <span className="text-gray-400">free</span>
                     ) : (
-                      `€${p.finalPrice}`
+                      `€${pricing.items[idx].price}`
                     )}
                   </td>
                 </tr>
               ))}
+              {pricing.extraContribution > 0 && (
+                <tr className="text-gray-700 bg-amber-50">
+                  <td className="px-4 py-2" />
+                  <td className="px-4 py-2 font-medium" colSpan={4}>
+                    Voluntary contribution
+                  </td>
+                  <td className="px-4 py-2 text-right font-semibold">
+                    €{pricing.extraContribution}
+                  </td>
+                </tr>
+              )}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-gray-200 bg-gray-50">
                 <td
-                  colSpan={6}
+                  colSpan={5}
                   className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
                 >
                   Total

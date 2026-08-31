@@ -20,13 +20,21 @@ PHONE_RE = r"^\+?[0-9\s\-]{9,15}$"
 RegistrationStatus = Literal["new", "wait_for_payment", "paid", "accepted", "rejected"]
 RegistrationType = Literal["me_and_others", "just_others", "only_me"]
 
+# Accommodation package chosen per attending person.
+#   double – 179 € / person in a twin room
+#   single – 219 € / person in a single room
+#   none   – 0 €, attends the lectures only (no room, no meals)
+Accommodation = Literal["double", "single", "none"]
+
 
 class AttendeeData(BaseModel):
     name: str = Field(min_length=1)
     surname: str = Field(min_length=1)
-    age: int = Field(ge=0, le=120)
+    accommodation: Accommodation
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
+    recreation_voucher: bool = False
+    roommate_preference: Optional[str] = None
 
     @field_validator("phone")
     @classmethod
@@ -41,11 +49,12 @@ class AttendeeData(BaseModel):
 class RegistrantData(BaseModel):
     name: str = Field(min_length=1)
     surname: str = Field(min_length=1)
-    age: Optional[int] = Field(default=None, ge=0, le=120)
     phone: str
     email: EmailStr
     is_attendee: bool
-    transportation: Literal["individual", "train_with_organizer"]
+    accommodation: Optional[Accommodation] = None
+    recreation_voucher: bool = False
+    roommate_preference: Optional[str] = None
 
     @field_validator("phone")
     @classmethod
@@ -62,6 +71,8 @@ class RegistrationRequest(BaseModel):
     registrant: RegistrantData
     attendees: list[AttendeeData] = Field(default_factory=list)
     note: Optional[str] = None
+    # Voluntary contribution on top of the accommodation price, in whole euros.
+    extra_contribution: int = Field(default=0, ge=0, le=10000)
 
     @field_validator("attendees")
     @classmethod
@@ -74,11 +85,9 @@ class RegistrationRequest(BaseModel):
 
     @field_validator("registrant")
     @classmethod
-    def validate_registrant_age(cls, v: RegistrantData, info: object) -> RegistrantData:
-        values = getattr(info, "data", {})
-        reg_type = values.get("registration_type")
-        if reg_type == "me_and_others" and v.age is None:
-            raise ValueError("age is required when registration_type is 'me_and_others'.")
+    def validate_registrant_accommodation(cls, v: RegistrantData, info: object) -> RegistrantData:
+        if v.is_attendee and v.accommodation is None:
+            raise ValueError("accommodation is required when the registrant attends.")
         return v
 
 
@@ -87,6 +96,7 @@ class RegistrationRecord(BaseModel):
     registrant: RegistrantData
     attendees: list[AttendeeData]
     note: Optional[str] = None
+    extra_contribution: int = 0
     registered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     update_token: str
     status: RegistrationStatus = "new"
@@ -99,6 +109,7 @@ class RegistrationTokenResponse(BaseModel):
     registrant: RegistrantData
     attendees: list[AttendeeData]
     note: Optional[str] = None
+    extra_contribution: int = 0
     is_paid: bool
     cancelled: bool
 
@@ -117,6 +128,7 @@ class AdminRegistrationItem(BaseModel):
     registrant: RegistrantData
     attendees: list[AttendeeData]
     note: Optional[str] = None
+    extra_contribution: int = 0
     status: RegistrationStatus
     registered_at: datetime
     update_token: str = ""

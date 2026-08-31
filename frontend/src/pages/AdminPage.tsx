@@ -2,7 +2,11 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../admin.css";
 import { useAdminAuth } from "../context/AdminAuthContext";
-import RegistrationList, { type RegistrationItem, type RegistrationStatus } from "../components/admin/RegistrationList";
+import RegistrationList, {
+  toPeople,
+  type RegistrationItem,
+  type RegistrationStatus,
+} from "../components/admin/RegistrationList";
 import { calculatePrice } from "../utils/pricing";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -64,22 +68,18 @@ export default function AdminPage() {
 
   const countByStatus = (s: RegistrationStatus) => items.filter((i) => i.status === s).length;
 
-  const { totalPeople, totalAmount } = useMemo(() => {
+  const { totalPeople, totalAmount, totalVouchers } = useMemo(() => {
     let people = 0;
     let amount = 0;
+    let vouchers = 0;
     for (const item of items) {
       if (item.status === "rejected") continue;
-      people += (item.registrant.is_attendee ? 1 : 0) + item.attendees.length;
-      const campers: { name: string; surname: string; age: number }[] = [];
-      if (item.registrant.is_attendee && item.registrant.age != null) {
-        campers.push({ name: item.registrant.name, surname: item.registrant.surname, age: item.registrant.age });
-      }
-      for (const a of item.attendees) {
-        campers.push({ name: a.name, surname: a.surname, age: a.age });
-      }
-      if (campers.length > 0) amount += calculatePrice(campers).total;
+      const attending = toPeople(item);
+      people += attending.length;
+      vouchers += attending.filter((p) => p.voucher).length;
+      amount += calculatePrice(attending, item.extra_contribution ?? 0).total;
     }
-    return { totalPeople: people, totalAmount: amount };
+    return { totalPeople: people, totalAmount: amount, totalVouchers: vouchers };
   }, [items]);
 
   return (
@@ -87,7 +87,7 @@ export default function AdminPage() {
       {/* Header */}
       <header className="bg-green-800 text-white px-6 py-4 flex items-center justify-between shadow">
         <div className="flex items-center gap-4">
-          <span className="text-lg font-bold tracking-wide">Camp Admin</span>
+          <span className="text-lg font-bold tracking-wide">Vzdelávanie EVS Admin</span>
           <Link
             to="/admin/attendees"
             title="View attendees table"
@@ -140,6 +140,9 @@ export default function AdminPage() {
             </span>
             <span className="text-gray-600">
               Expected: <span className="font-semibold text-green-800">€{totalAmount}</span>
+            </span>
+            <span className="text-gray-600">
+              Vouchers: <span className="font-semibold text-amber-700">{totalVouchers}</span>
             </span>
           </div>
         )}

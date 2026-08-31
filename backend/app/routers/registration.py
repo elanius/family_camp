@@ -45,6 +45,7 @@ async def register(payload: RegistrationRequest) -> dict:
         registrant=payload.registrant,
         attendees=payload.attendees,
         note=payload.note or None,
+        extra_contribution=payload.extra_contribution,
         update_token=token,
     )
 
@@ -141,6 +142,7 @@ async def get_registration(token: str) -> RegistrationTokenResponse:
         registrant=doc["registrant"],
         attendees=doc["attendees"],
         note=doc.get("note"),
+        extra_contribution=doc.get("extra_contribution", 0),
         is_paid=is_paid,
         cancelled=cancelled,
     )
@@ -204,6 +206,7 @@ async def update_registration(token: str, payload: RegistrationRequest) -> dict:
         "registrant": payload.registrant.model_dump(),
         "attendees": [a.model_dump() for a in payload.attendees],
         "note": payload.note or None,
+        "extra_contribution": payload.extra_contribution,
     }
     await collection.update_one({"update_token": token}, {"$set": update_fields})
 

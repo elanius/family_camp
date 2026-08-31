@@ -1,7 +1,12 @@
-# Rodinný tábor
+# Vzdelávanie EVS 2026
 
-Landing page for the family camp with email pre-registration.  
-Visitors leave their email to be notified when camp registrations open.
+Registračná stránka pre víkendové biblické vzdelávanie EVS
+(23. – 25. 10. 2026, Hotel Máj***, Liptovský Ján).
+
+Návštevník vyplní prihlášku (za seba a/alebo za ďalšie osoby), dostane
+potvrdzovací e-mail s odkazom na neskoršiu úpravu alebo zrušenie prihlášky.
+Administrátor v samostatnej sekcii spravuje stav prihlášok a posiela platobné
+inštrukcie s QR kódom (Pay by Square).
 
 ## Stack
 
@@ -9,8 +14,9 @@ Visitors leave their email to be notified when camp registrations open.
 |----------|-------------------------------------------|
 | Frontend | React 18 + Vite 5 + TypeScript            |
 | Backend  | FastAPI + UV + Motor (async MongoDB)      |
-| Database | MongoDB                                   |
-| Email    | Gmail SMTP via `aiosmtplib`               |
+| Database | MongoDB Atlas — databáza `evs-vzdelavanie-2026` |
+| Email    | Gmail SMTP (App Password)                 |
+| E2E      | Playwright                                |
 
 ## Project structure
 
@@ -22,73 +28,119 @@ family_camp/
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── models.py
-│   │   ├── routers/register.py
-│   │   └── services/email.py
+│   │   ├── routers/{register,registration,admin}.py
+│   │   └── services/{email,auth}.py
+│   ├── scripts/create_admin.py
 │   ├── pyproject.toml
 │   └── .env.example
 └── frontend/         # Vite + React + TypeScript
-    ├── src/
-    │   ├── App.tsx
-    │   ├── index.css
-    │   └── components/
-    │       ├── HeroSection.tsx
-    │       ├── CampInfo.tsx
-    │       └── RegisterForm.tsx
-    └── index.html
+    ├── e2e/          # Playwright specs
+    └── src/
+        ├── eventInfo.ts        # termín, miesto, prednášajúci, kontakt
+        ├── utils/pricing.ts    # ceny balíkov ubytovania
+        ├── components/
+        └── pages/
 ```
+
+## Registrácia — dátový model
+
+Prihlášku podáva jedna **kontaktná osoba (platiteľ)** v jednom z troch režimov:
+
+| `registration_type` | Kto sa zúčastní                          |
+|---------------------|------------------------------------------|
+| `only_me`           | len prihlasujúci                         |
+| `me_and_others`     | prihlasujúci + ďalší účastníci           |
+| `just_others`       | len ďalší účastníci (platiteľ nepríde)   |
+
+Každý **účastník** si vyberá balík ubytovania a stravy:
+
+| `accommodation` | Cena / osoba | Obsah                                            |
+|-----------------|--------------|--------------------------------------------------|
+| `double`        | 179 €        | 2× nocľah v dvojlôžkovej izbe, 2× raňajky, 2× obed, 2× večera, miestna daň |
+| `single`        | 219 €        | to isté v jednolôžkovej izbe                      |
+| `none`          | 0 €          | účasť len na prednáškach                          |
+
+Ďalej sa pri každom účastníkovi eviduje záujem o **rekreačný poukaz**
+(len pri pobyte, t. j. `double`/`single`) a **preferovaný spolubývajúci**
+(len pri `double`). K celej prihláške patrí voliteľný **dobrovoľný príspevok**
+v celých eurách, ktorý sa pripočíta k výslednej sume.
+
+Ceny sú definované na dvoch miestach a musia zostať zosúladené:
+[`frontend/src/utils/pricing.ts`](frontend/src/utils/pricing.ts) a
+`_ACCOMMODATION_PRICE` v [`backend/app/routers/admin.py`](backend/app/routers/admin.py).
 
 ## Getting started
 
 ### Prerequisites
 
-- Python ≥ 3.11
-- [uv](https://docs.astral.sh/uv/) (`pip install uv` or see uv docs)
+- Python ≥ 3.13
+- [uv](https://docs.astral.sh/uv/)
 - Node.js ≥ 18
-- MongoDB running locally (default: `mongodb://localhost:27017`)
+- Prístup k MongoDB Atlas (alebo lokálna Mongo cez `docker compose up -d`)
 
-### Backend setup
+### Backend
 
 ```bash
 cd backend
 
-# Copy and fill in environment variables
-cp .env.example .env
-
-# Install dependencies and start the dev server
+cp .env.example .env       # doplniť MONGODB_URI, GMAIL_*, BANK_*, JWT_SECRET
 uv sync
-uv run uvicorn app.main:app --reload
-# API available at http://localhost:8000
+uv run uvicorn app.main:app --reload --port 8008
+# API na http://localhost:8008 — dev proxy frontendu mieri na tento port
 ```
 
-### Gmail SMTP
+Vytvorenie admin používateľa:
 
-1. Enable 2-Step Verification on your Google account.
-2. Go to **Google Account → Security → App Passwords**.
-3. Create an App Password for "Mail".
-4. Set `GMAIL_USER` and `GMAIL_APP_PASSWORD` in `backend/.env`.
+```bash
+cd backend
+uv run python scripts/create_admin.py --username admin --password <heslo>
+```
 
-### Frontend setup
+### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev
-# Dev server available at http://localhost:5173
-# API calls are proxied to http://localhost:8000
+npm run dev      # http://localhost:5173, /api sa proxuje na :8008
+npm run build    # produkčný build do frontend/dist/
+npm run lint
 ```
 
-### Build for production
+### E2E testy
 
 ```bash
 cd frontend
-npm run build
-# Output in frontend/dist/ – serve via FastAPI or a web server
+npx playwright install chromium   # prvýkrát
+npx playwright test
 ```
 
-### Requirement for the next year
+Testy si samy spustia dev server a backend **nepotrebujú** — sieťové volania sú
+mockované cez `page.route`.
 
-- [ ] - Keep price in DB as it can change with date or as an extra discount for selected people
-- [ ] - Recipient name should match account owner
-- [ ] - Field for admin's note
-- [ ] - Show unique id in CampAdmin form
-- [ ] - Quick filter by Name, Unique ID 
+## Konfigurácia (backend/.env)
+
+| Premenná           | Popis                                                        |
+|--------------------|--------------------------------------------------------------|
+| `MONGODB_URI`      | Connection string na Atlas cluster                            |
+| `MONGODB_DB`       | `evs-vzdelavanie-2026`                                        |
+| `APP_BASE_URL`     | Verejná URL frontendu — z nej sa skladá odkaz na úpravu prihlášky v e-maile |
+| `EMAIL_ENABLED`    | `false` vypne všetky odchádzajúce e-maily (vývoj)             |
+| `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Gmail SMTP App Password                       |
+| `BANK_IBAN`, `BANK_NAME`, `BANK_BENEFICIARY` | Údaje do platobného e-mailu a QR kódu |
+| `JWT_SECRET`       | Podpisovanie admin tokenov                                    |
+
+Bez `GMAIL_APP_PASSWORD` sa e-maily preskočia (zaloguje sa varovanie),
+registrácia však prebehne normálne.
+
+## Admin
+
+| Route                  | Účel                                                    |
+|------------------------|---------------------------------------------------------|
+| `/admin/login`         | Prihlásenie                                             |
+| `/admin`               | Zoznam prihlášok, stavy, súhrn osôb / sumy / poukazov   |
+| `/admin/attendees`     | Plochá tabuľka účastníkov + export do CSV               |
+| `/admin/payment/:id`   | Platobné údaje, QR kód a odoslanie e-mailu s platbou    |
+
+Stavy prihlášky: `new → wait_for_payment → paid → accepted`, kedykoľvek
+`rejected`. Prihlášku už nie je možné meniť cez verejný odkaz, keď je
+`paid` alebo `accepted`.

@@ -1,7 +1,7 @@
 [project]
-name = "family-camp-backend"
+name = "evs-vzdelavanie-backend"
 version = "0.1.0"
-description = "Family Camp – email pre-registration backend"
+description = "Vzdelávanie EVS – registration backend"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",

@@ -8,7 +8,7 @@ services:
     volumes:
       - mongo_data:/data/db
     environment:
-      MONGO_INITDB_DATABASE: kids-camp-2026
+      MONGO_INITDB_DATABASE: evs-vzdelavanie-2026
 
 volumes:
   mongo_data:

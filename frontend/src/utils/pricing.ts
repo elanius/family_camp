@@ -1,80 +1,67 @@
-export type AgeCategory = "baby" | "kid" | "adult";
+export type Accommodation = "double" | "single" | "none";
+
+export const ACCOMMODATION_PRICE: Record<Accommodation, number> = {
+  double: 179,
+  single: 219,
+  none: 0,
+};
+
+export const ACCOMMODATION_LABEL: Record<Accommodation, string> = {
+  double: "Dvojlôžková izba",
+  single: "Jednolôžková izba",
+  none: "Bez ubytovania a stravy",
+};
+
+export const ACCOMMODATION_NOTE: Record<Accommodation, string> = {
+  double: "2× nocľah, 2× raňajky, 2× obed, 2× večera, miestna daň",
+  single: "2× nocľah, 2× raňajky, 2× obed, 2× večera, miestna daň",
+  none: "Účasť len na prednáškach, bez ubytovania a stravy",
+};
+
+export const ACCOMMODATION_ORDER: Accommodation[] = ["double", "single", "none"];
+
+/** Room types that qualify for the employer recreation voucher (2-night stay). */
+export function qualifiesForVoucher(accommodation: Accommodation): boolean {
+  return accommodation !== "none";
+}
+
+export interface PricePerson {
+  name: string;
+  surname: string;
+  accommodation: Accommodation;
+}
 
 export interface PriceLineItem {
   name: string;
-  age: number;
-  category: AgeCategory;
-  basePrice: number;
-  lateFee: number;
-  discount: number;
-  finalPrice: number;
+  accommodation: Accommodation;
+  price: number;
 }
 
 export interface PriceBreakdown {
   items: PriceLineItem[];
+  /** Sum of the accommodation packages, without the voluntary contribution. */
+  accommodationTotal: number;
+  extraContribution: number;
   total: number;
-  isLatePeriod: boolean;
-}
-
-const BASE_PRICE: Record<AgeCategory, number> = {
-  baby: 0,
-  kid: 130,
-  adult: 150,
-};
-
-// Every sibling from the 2nd onwards gets €20 off their own price
-const KID_SIBLING_DISCOUNT = 20;
-
-// Prices increase by €10 from July 1, 2026 onwards
-const LATE_FEE = 10;
-const LATE_FROM = new Date(2026, 6, 1); // month is 0-indexed
-
-export const CATEGORY_LABEL: Record<AgeCategory, string> = {
-  baby: "bábätko (0–3 r.)",
-  kid: "dieťa (4–14 r.)",
-  adult: "dospelý/á (15+ r.)",
-};
-
-export function getCategory(age: number): AgeCategory {
-  if (age <= 3) return "baby";
-  if (age <= 14) return "kid";
-  return "adult";
-}
-
-function isLate(): boolean {
-  return false;
-  // return new Date() >= LATE_FROM;
 }
 
 export function calculatePrice(
-  attendees: { name: string; surname: string; age: number }[],
+  people: PricePerson[],
+  extraContribution = 0,
 ): PriceBreakdown {
-  const latePeriod = isLate();
-  let kidCount = 0;
+  const items: PriceLineItem[] = people.map((p) => ({
+    name: `${p.name} ${p.surname}`.trim(),
+    accommodation: p.accommodation,
+    price: ACCOMMODATION_PRICE[p.accommodation],
+  }));
 
-  const items: PriceLineItem[] = attendees.map((a) => {
-    const category = getCategory(a.age);
-    const basePrice = BASE_PRICE[category];
-    const lateFee = latePeriod && basePrice > 0 ? LATE_FEE : 0;
-    let discount = 0;
+  const accommodationTotal = items.reduce((sum, item) => sum + item.price, 0);
+  const extra = Math.max(0, Math.round(extraContribution) || 0);
 
-    if (category === "kid") {
-      // 2nd, 3rd, ... sibling each get €20 off their own price
-      if (kidCount > 0) discount = KID_SIBLING_DISCOUNT;
-      kidCount++;
-    }
-
-    return {
-      name: `${a.name} ${a.surname}`.trim(),
-      age: a.age,
-      category,
-      basePrice,
-      lateFee,
-      discount,
-      finalPrice: Math.max(0, basePrice + lateFee - discount),
-    };
-  });
-
-  const total = items.reduce((sum, item) => sum + item.finalPrice, 0);
-  return { items, total, isLatePeriod: latePeriod };
+  return {
+    items,
+    accommodationTotal,
+    extraContribution: extra,
+    total: accommodationTotal + extra,
+  };
 }

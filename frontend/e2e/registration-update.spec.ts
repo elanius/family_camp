@@ -1,300 +1,208 @@
 import { test, expect, type Page } from "@playwright/test";
 
-const TOKEN = "abc123";
-const TAKEN_EMAIL = "other@example.sk";
+const TOKEN = "test-token-123";
 
-const mockRegistration = {
-  registration_type: "just_others",
+const REGISTRATION = {
+  registration_type: "me_and_others",
   registrant: {
-    name: "Mária",
-    surname: "Horváthová",
-    age: null,
-    phone: "+421911222333",
-    email: "mama@example.sk",
-    is_attendee: false,
-    transportation: "individual",
+    name: "Ján",
+    surname: "Novák",
+    phone: "+421900000000",
+    email: "jan@example.sk",
+    is_attendee: true,
+    accommodation: "double",
+    recreation_voucher: true,
+    roommate_preference: "Eva Nováková",
   },
-  attendees: [{ name: "Tomáš", surname: "Horváth", age: 9 }],
+  attendees: [
+    {
+      name: "Eva",
+      surname: "Nováková",
+      accommodation: "double",
+      phone: null,
+      email: "eva@example.sk",
+      recreation_voucher: false,
+      roommate_preference: "Ján Novák",
+    },
+  ],
+  note: "Prídeme v piatok.",
+  extra_contribution: 20,
   is_paid: false,
   cancelled: false,
 };
 
-async function setupMocks(
-  page: Page,
-  overrides: Partial<typeof mockRegistration> = {},
-) {
-  const data = { ...mockRegistration, ...overrides };
-
-  await page.route(`/api/registration/${TOKEN}`, async (route) => {
-    const method = route.request().method();
-    if (method === "GET") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(data),
-      });
-    } else if (method === "PUT") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "Registrácia bola aktualizovaná." }),
-      });
-    } else if (method === "DELETE") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "Registrácia bola zrušená." }),
-      });
-    } else {
-      await route.continue();
-    }
-  });
-
-  await page.route("/api/registration/check-email*", async (route) => {
-    const url = new URL(route.request().url());
-    const email = url.searchParams.get("email") ?? "";
+/** Serve GET /api/registration/:token with the given overrides. */
+async function stubLoad(page: Page, overrides: Record<string, unknown> = {}) {
+  await page.route(`**/api/registration/${TOKEN}`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ exists: email === TAKEN_EMAIL }),
+      body: JSON.stringify({ ...REGISTRATION, ...overrides }),
     });
   });
 }
 
-test.describe("Update registration page", () => {
-  test("shows invalid token error for 404 response", async ({ page }) => {
-    await page.route("/api/registration/invalidtoken", async (route) => {
-      if (route.request().method() === "GET") {
-        await route.fulfill({
-          status: 404,
-          contentType: "application/json",
-          body: JSON.stringify({ detail: "Not found." }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
-
-    await page.goto("/update/invalidtoken");
-    await expect(page.getByText("Neplatný")).toBeVisible();
-  });
-
-  test("shows locked message when registration is paid", async ({ page }) => {
-    await setupMocks(page, { is_paid: true });
+test.describe("Update page – loading", () => {
+  test("prefills the form from the saved registration", async ({ page }) => {
+    await stubLoad(page);
     await page.goto(`/update/${TOKEN}`);
 
-    await expect(page.getByText("Zmeny nie sú možné")).toBeVisible();
-  });
-
-  test("shows cancelled message when registration is cancelled", async ({
-    page,
-  }) => {
-    await setupMocks(page, { cancelled: true });
-    await page.goto(`/update/${TOKEN}`);
-
-    await expect(page.getByText("zrušená")).toBeVisible();
-  });
-
-  test("pre-fills form with existing registration data", async ({ page }) => {
-    await setupMocks(page);
-    await page.goto(`/update/${TOKEN}`);
-
-    await expect(page.getByLabel("Meno *").first()).toHaveValue("Mária");
-    await expect(page.getByLabel("Priezvisko *").first()).toHaveValue(
-      "Horváthová",
-    );
-    await expect(page.getByLabel("Telefón *")).toHaveValue("+421911222333");
-    await expect(page.getByLabel("E-mail *")).toHaveValue("mama@example.sk");
     await expect(
-      page.getByRole("radio", { name: /Individuálna doprava/ }),
+      page.getByRole("heading", { name: "Úprava prihlášky" }),
+    ).toBeVisible();
+    await expect(page.locator("#reg-name")).toHaveValue("Ján");
+    await expect(page.locator("#reg-email")).toHaveValue("jan@example.sk");
+    await expect(
+      page.locator('input[name="reg-accommodation"][value="double"]'),
     ).toBeChecked();
+    await expect(page.locator("#reg-roommate")).toHaveValue("Eva Nováková");
+    await expect(page.locator("#reg-extra")).toHaveValue("20");
+    await expect(page.locator("#name-0")).toHaveValue("Eva");
+    await expect(page.locator("#reg-note")).toHaveValue("Prídeme v piatok.");
+    // 179 + 179 + 20
+    await expect(page.locator(".price-preview__total")).toContainText("378");
   });
 
-  test("allows editing and saving changes", async ({ page }) => {
-    await setupMocks(page);
+  test("shows a not-found screen for an unknown token", async ({ page }) => {
+    await page.route("**/api/registration/*", (route) =>
+      route.fulfill({ status: 404, body: "{}" }),
+    );
     await page.goto(`/update/${TOKEN}`);
-
-    await page.getByLabel("Meno *").first().fill("Jana");
-    await page.getByRole("button", { name: "Uložiť zmeny" }).click();
-
     await expect(
-      page.getByText("Registrácia bola aktualizovaná."),
+      page.getByRole("heading", { name: "Neplatný odkaz" }),
     ).toBeVisible();
   });
 
-  test("sends correct PUT payload on save", async ({ page }) => {
-    let capturedBody: unknown;
-
-    await page.route(`/api/registration/${TOKEN}`, async (route) => {
-      const method = route.request().method();
-      if (method === "GET") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(mockRegistration),
-        });
-      } else if (method === "PUT") {
-        capturedBody = JSON.parse(route.request().postData() ?? "{}");
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ message: "ok" }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
-
+  test("locks a registration that is already paid", async ({ page }) => {
+    await stubLoad(page, { is_paid: true });
     await page.goto(`/update/${TOKEN}`);
-    await page.getByLabel("Meno *").first().fill("Jana");
-    await page.getByRole("button", { name: "Uložiť zmeny" }).click();
-
-    expect(capturedBody).toMatchObject({
-      registration_type: "just_others",
-      registrant: expect.objectContaining({
-        name: "Jana",
-        surname: "Horváthová",
-      }),
-    });
+    await expect(
+      page.getByRole("heading", { name: "Prihláška je uhradená" }),
+    ).toBeVisible();
   });
 
-  test("clicking Zrušiť registráciu shows confirmation prompt", async ({
+  test("shows a cancelled registration as cancelled", async ({ page }) => {
+    await stubLoad(page, { cancelled: true });
+    await page.goto(`/update/${TOKEN}`);
+    await expect(
+      page.getByRole("heading", { name: "Prihláška bola zrušená" }),
+    ).toBeVisible();
+  });
+
+  test("a contact person who does not attend gets no package picker", async ({
     page,
   }) => {
-    await setupMocks(page);
+    await stubLoad(page, {
+      registration_type: "just_others",
+      registrant: {
+        ...REGISTRATION.registrant,
+        is_attendee: false,
+        accommodation: null,
+        recreation_voucher: false,
+        roommate_preference: null,
+      },
+    });
     await page.goto(`/update/${TOKEN}`);
 
-    await page.getByRole("button", { name: "Zrušiť registráciu" }).click();
-
     await expect(
-      page.getByText("Naozaj chcete zrušiť registráciu?"),
+      page.locator('input[name="reg-accommodation"][value="double"]'),
+    ).not.toBeVisible();
+    await expect(page.locator('input[name="accommodation-0"][value="double"]')).toBeVisible();
+  });
+});
+
+test.describe("Update page – saving", () => {
+  test("sends the edited values and confirms the save", async ({ page }) => {
+    await stubLoad(page);
+    let body: Record<string, never> | undefined;
+    await page.route(`**/api/registration/${TOKEN}`, async (route) => {
+      if (route.request().method() !== "PUT") return route.fallback();
+      body = JSON.parse(route.request().postData() ?? "{}");
+      await route.fulfill({ status: 200, body: "{}" });
+    });
+
+    await page.goto(`/update/${TOKEN}`);
+    await page.locator('input[name="reg-accommodation"][value="single"]').check();
+    await page.locator("#reg-extra").fill("60");
+    await page.getByRole("button", { name: "Uložiť zmeny" }).click();
+
+    await expect(page.getByText("Prihláška bola aktualizovaná.")).toBeVisible();
+
+    const payload = body as unknown as {
+      registrant: { accommodation: string };
+      extra_contribution: number;
+    };
+    expect(payload.registrant.accommodation).toBe("single");
+    expect(payload.extra_contribution).toBe(60);
+  });
+
+  test("reports a save failure", async ({ page }) => {
+    await stubLoad(page);
+    await page.route(`**/api/registration/${TOKEN}`, async (route) => {
+      if (route.request().method() !== "PUT") return route.fallback();
+      await route.fulfill({ status: 500, body: "{}" });
+    });
+
+    await page.goto(`/update/${TOKEN}`);
+    await page.getByRole("button", { name: "Uložiť zmeny" }).click();
+    await expect(
+      page.getByText("Uloženie zlyhalo. Skúste to prosím znova."),
     ).toBeVisible();
   });
 
-  test("cancels registration after confirmation", async ({ page }) => {
-    await setupMocks(page);
+  test("reports a registration locked server-side", async ({ page }) => {
+    await stubLoad(page);
+    await page.route(`**/api/registration/${TOKEN}`, async (route) => {
+      if (route.request().method() !== "PUT") return route.fallback();
+      await route.fulfill({ status: 403, body: "{}" });
+    });
+
     await page.goto(`/update/${TOKEN}`);
-
-    await page.getByRole("button", { name: "Zrušiť registráciu" }).click();
-    await page.getByRole("button", { name: "Áno, zrušiť registráciu" }).click();
-
-    await expect(page.getByText("Registrácia bola zrušená.")).toBeVisible();
+    await page.getByRole("button", { name: "Uložiť zmeny" }).click();
+    await expect(
+      page.getByText("Prihláška je uzavretá, zmeny nie sú možné."),
+    ).toBeVisible();
   });
 
-  test("going back from confirmation hides the prompt", async ({ page }) => {
-    await setupMocks(page);
+  test("validation still applies when editing", async ({ page }) => {
+    await stubLoad(page);
     await page.goto(`/update/${TOKEN}`);
 
-    await page.getByRole("button", { name: "Zrušiť registráciu" }).click();
+    await page.locator("#reg-name").fill("");
+    await page.getByRole("button", { name: "Uložiť zmeny" }).click();
+    await expect(page.getByText("Meno je povinné.")).toBeVisible();
+  });
+});
+
+test.describe("Update page – cancelling", () => {
+  test("asks for confirmation before cancelling", async ({ page }) => {
+    await stubLoad(page);
+    await page.route(`**/api/registration/${TOKEN}`, async (route) => {
+      if (route.request().method() !== "DELETE") return route.fallback();
+      await route.fulfill({ status: 200, body: "{}" });
+    });
+
+    await page.goto(`/update/${TOKEN}`);
+    await page.getByRole("button", { name: "Zrušiť prihlášku" }).click();
     await expect(
-      page.getByText("Naozaj chcete zrušiť registráciu?"),
+      page.getByText("Naozaj chcete zrušiť prihlášku?"),
     ).toBeVisible();
 
+    await page.getByRole("button", { name: "Áno, zrušiť prihlášku" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Prihláška bola zrušená" }),
+    ).toBeVisible();
+  });
+
+  test("backing out of the confirmation keeps the form", async ({ page }) => {
+    await stubLoad(page);
+    await page.goto(`/update/${TOKEN}`);
+
+    await page.getByRole("button", { name: "Zrušiť prihlášku" }).click();
     await page.getByRole("button", { name: "Späť" }).click();
     await expect(
-      page.getByText("Naozaj chcete zrušiť registráciu?"),
-    ).not.toBeVisible();
-  });
-
-  test("shows email conflict error on PUT 409", async ({ page }) => {
-    await page.route(`/api/registration/${TOKEN}`, async (route) => {
-      const method = route.request().method();
-      if (method === "GET") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(mockRegistration),
-        });
-      } else if (method === "PUT") {
-        await route.fulfill({
-          status: 409,
-          contentType: "application/json",
-          body: JSON.stringify({
-            detail: "Tento e-mail je už zaregistrovaný.",
-          }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
-
-    // Allow check-email to pass so we can still submit
-    await page.route("/api/registration/check-email*", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ exists: false }),
-      });
-    });
-
-    await page.goto(`/update/${TOKEN}`);
-    await page.getByLabel("E-mail *").fill("other-taken@example.sk");
-    await page.getByRole("button", { name: "Uložiť zmeny" }).click();
-
-    // 409 from PUT → sets isEmailTaken → inline error shown
-    await expect(
-      page.getByText("Tento e-mail je už zaregistrovaný."),
-    ).toBeVisible();
-  });
-
-  test("shows locked error on PUT 403", async ({ page }) => {
-    await page.route(`/api/registration/${TOKEN}`, async (route) => {
-      const method = route.request().method();
-      if (method === "GET") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(mockRegistration),
-        });
-      } else if (method === "PUT") {
-        await route.fulfill({
-          status: 403,
-          contentType: "application/json",
-          body: JSON.stringify({
-            detail: "Registrácia je uzavretá, zmeny nie sú možné.",
-          }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
-
-    await page.goto(`/update/${TOKEN}`);
-    await page.getByRole("button", { name: "Uložiť zmeny" }).click();
-
-    await expect(
-      page.getByText("Registrácia je uzavretá, zmeny nie sú možné."),
-    ).toBeVisible();
-  });
-
-  test("shows locked error on DELETE 403", async ({ page }) => {
-    await page.route(`/api/registration/${TOKEN}`, async (route) => {
-      const method = route.request().method();
-      if (method === "GET") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(mockRegistration),
-        });
-      } else if (method === "DELETE") {
-        await route.fulfill({
-          status: 403,
-          contentType: "application/json",
-          body: JSON.stringify({
-            detail: "Registrácia je uzavretá, zrušenie nie je možné.",
-          }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
-
-    await page.goto(`/update/${TOKEN}`);
-    await page.getByRole("button", { name: "Zrušiť registráciu" }).click();
-    await page.getByRole("button", { name: "Áno, zrušiť registráciu" }).click();
-
-    await expect(
-      page.getByText("Registrácia je uzavretá, zrušenie nie je možné."),
+      page.getByRole("button", { name: "Zrušiť prihlášku" }),
     ).toBeVisible();
   });
 });

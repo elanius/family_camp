@@ -1,85 +1,62 @@
-import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AttendeeForm, {
   validateAttendee,
   type AttendeeData,
   type AttendeeErrors,
 } from "../components/AttendeeForm";
-import { calculatePrice, CATEGORY_LABEL } from "../utils/pricing";
+import {
+  ACCOMMODATION_LABEL,
+  ACCOMMODATION_NOTE,
+  ACCOMMODATION_ORDER,
+  ACCOMMODATION_PRICE,
+  calculatePrice,
+  qualifiesForVoucher,
+  type Accommodation,
+} from "../utils/pricing";
+import {
+  emptyAttendee,
+  emptyRegistrant,
+  type RegistrantData,
+  type RegistrationType,
+} from "../context/RegistrationContext";
+import { validateRegistrant, toPricePeople } from "./RegistrationFormPage";
+import { EVENT_SUBTITLE } from "../eventInfo";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-type RegistrationType = "me_and_others" | "just_others" | "only_me";
-
-interface RegistrantData {
-  name: string;
-  surname: string;
-  age: string;
-  phone: string;
-  email: string;
-  is_attendee: boolean;
-  transportation: "" | "individual" | "train_with_organizer";
-}
-
-interface RegistrantErrors {
-  name?: string;
-  surname?: string;
-  age?: string;
-  phone?: string;
-  email?: string;
-  transportation?: string;
-}
-
-const PHONE_RE = /^\+?[0-9\s\-]{9,15}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function emptyAttendee(): AttendeeData {
-  return { name: "", surname: "", age: "", phone: "", email: "" };
-}
-
-function validateRegistrant(
-  data: RegistrantData,
-  includeAge: boolean,
-): RegistrantErrors {
-  const errors: RegistrantErrors = {};
-  if (!data.name.trim()) errors.name = "Meno je povinné.";
-  if (!data.surname.trim()) errors.surname = "Priezvisko je povinné.";
-
-  if (includeAge) {
-    const ageNum = parseInt(data.age, 10);
-    if (!data.age.trim()) {
-      errors.age = "Vek je povinný.";
-    } else if (isNaN(ageNum) || ageNum < 0 || ageNum > 120) {
-      errors.age = "Zadajte platný vek (0–120).";
-    }
-  }
-
-  if (!data.phone.trim()) {
-    errors.phone = "Telefón je povinný.";
-  } else if (!PHONE_RE.test(data.phone)) {
-    errors.phone = "Zadajte platné telefónne číslo.";
-  }
-
-  if (!data.email.trim()) {
-    errors.email = "E-mail je povinný.";
-  } else if (!EMAIL_RE.test(data.email)) {
-    errors.email = "Zadajte platný e-mail.";
-  }
-
-  if (!data.transportation) {
-    errors.transportation = "Doprava je povinná.";
-  }
-
-  return errors;
+interface LoadedRegistration {
+  registration_type: RegistrationType;
+  registrant: {
+    name: string;
+    surname: string;
+    phone: string;
+    email: string;
+    is_attendee: boolean;
+    accommodation?: Accommodation | null;
+    recreation_voucher?: boolean;
+    roommate_preference?: string | null;
+  };
+  attendees: Array<{
+    name: string;
+    surname: string;
+    accommodation: Accommodation;
+    phone?: string | null;
+    email?: string | null;
+    recreation_voucher?: boolean;
+    roommate_preference?: string | null;
+  }>;
+  note?: string | null;
+  extra_contribution?: number;
+  is_paid: boolean;
+  cancelled: boolean;
 }
 
 function hasErrors(errors: object): boolean {
   return Object.values(errors).some(Boolean);
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 type LoadState = "loading" | "not-found" | "paid" | "cancelled" | "ready";
 type SaveState =
@@ -100,30 +77,22 @@ export default function RegistrationUpdatePage() {
   const [cancelState, setCancelState] = useState<CancelState>("idle");
 
   // Form state
-  const [regType, setRegType] = useState<RegistrationType>("just_others");
-  const [registrant, setRegistrant] = useState<RegistrantData>({
-    name: "",
-    surname: "",
-    age: "",
-    phone: "",
-    email: "",
-    is_attendee: false,
-    transportation: "",
-  });
+  const [regType, setRegType] = useState<RegistrationType>("only_me");
+  const [isAttendee, setIsAttendee] = useState(true);
+  const [registrant, setRegistrant] = useState<RegistrantData>(emptyRegistrant);
   const [attendees, setAttendees] = useState<AttendeeData[]>([emptyAttendee()]);
   const [note, setNote] = useState("");
-  const [registrantErrors, setRegistrantErrors] = useState<RegistrantErrors>(
-    {},
-  );
+  const [extraContribution, setExtraContribution] = useState("");
+  const [registrantErrors, setRegistrantErrors] = useState<
+    ReturnType<typeof validateRegistrant>
+  >({});
   const [attendeeErrors, setAttendeeErrors] = useState<AttendeeErrors[]>([{}]);
   const [isEmailTaken, setIsEmailTaken] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [touched, setTouched] = useState(false);
   const [originalEmail, setOriginalEmail] = useState("");
 
-  const isMeAndOthers = regType === "me_and_others";
   const isOnlyMe = regType === "only_me";
-  const includeAge = isMeAndOthers || isOnlyMe;
 
   // ── Load registration on mount ───────────────────────────────────────────
 
@@ -135,37 +104,12 @@ export default function RegistrationUpdatePage() {
 
     fetch(`${API_BASE}/api/registration/${token}`)
       .then(async (res) => {
-        if (res.status === 404) {
-          setLoadState("not-found");
-          return;
-        }
         if (!res.ok) {
           setLoadState("not-found");
           return;
         }
 
-        const data = (await res.json()) as {
-          registration_type: RegistrationType;
-          registrant: {
-            name: string;
-            surname: string;
-            age?: number;
-            phone: string;
-            email: string;
-            is_attendee: boolean;
-            transportation: "individual" | "train_with_organizer";
-          };
-          attendees: Array<{
-            name: string;
-            surname: string;
-            age: number;
-            phone?: string;
-            email?: string;
-          }>;
-          note?: string;
-          is_paid: boolean;
-          cancelled: boolean;
-        };
+        const data = (await res.json()) as LoadedRegistration;
 
         if (data.is_paid) {
           setLoadState("paid");
@@ -177,29 +121,32 @@ export default function RegistrationUpdatePage() {
         }
 
         setRegType(data.registration_type);
+        setIsAttendee(data.registrant.is_attendee);
         setRegistrant({
           name: data.registrant.name,
           surname: data.registrant.surname,
-          age:
-            data.registrant.age !== undefined && data.registrant.age !== null
-              ? String(data.registrant.age)
-              : "",
           phone: data.registrant.phone,
           email: data.registrant.email,
-          is_attendee: data.registrant.is_attendee,
-          transportation: data.registrant.transportation,
+          accommodation: data.registrant.accommodation ?? "",
+          recreationVoucher: data.registrant.recreation_voucher ?? false,
+          roommatePreference: data.registrant.roommate_preference ?? "",
         });
         setOriginalEmail(data.registrant.email);
         setAttendees(
           data.attendees.map((a) => ({
             name: a.name,
             surname: a.surname,
-            age: String(a.age),
+            accommodation: a.accommodation,
             phone: a.phone ?? "",
             email: a.email ?? "",
+            recreationVoucher: a.recreation_voucher ?? false,
+            roommatePreference: a.roommate_preference ?? "",
           })),
         );
         setNote(data.note ?? "");
+        setExtraContribution(
+          data.extra_contribution ? String(data.extra_contribution) : "",
+        );
         setAttendeeErrors(data.attendees.map(() => ({})));
         setLoadState("ready");
       })
@@ -208,12 +155,15 @@ export default function RegistrationUpdatePage() {
 
   // ── Form handlers ────────────────────────────────────────────────────────
 
-  function handleRegistrantChange(field: keyof RegistrantData, value: string) {
+  function handleRegistrantChange(
+    field: keyof RegistrantData,
+    value: string | boolean,
+  ) {
     const updated = { ...registrant, [field]: value };
     setRegistrant(updated);
     if (field === "email") setIsEmailTaken(false);
     if (touched) {
-      setRegistrantErrors(validateRegistrant(updated, includeAge));
+      setRegistrantErrors(validateRegistrant(updated, isAttendee));
     }
   }
 
@@ -239,7 +189,7 @@ export default function RegistrationUpdatePage() {
   function handleAttendeeChange(
     index: number,
     field: keyof AttendeeData,
-    value: string,
+    value: string | boolean,
   ) {
     const updated = attendees.map((a, i) =>
       i === index ? { ...a, [field]: value } : a,
@@ -266,7 +216,7 @@ export default function RegistrationUpdatePage() {
     e.preventDefault();
     setTouched(true);
 
-    const rErr = validateRegistrant(registrant, includeAge);
+    const rErr = validateRegistrant(registrant, isAttendee);
     const aErrs = attendees.map(validateAttendee);
     setRegistrantErrors(rErr);
     setAttendeeErrors(aErrs);
@@ -274,34 +224,39 @@ export default function RegistrationUpdatePage() {
     if (hasErrors(rErr) || isEmailTaken || (!isOnlyMe && aErrs.some(hasErrors)))
       return;
 
-    // Always preserve the age value if it exists, even for "only_me" registrations
-    const ageNum =
-      registrant.age && registrant.age.trim()
-        ? parseInt(registrant.age, 10)
-        : undefined;
+    const extra = parseInt(extraContribution, 10);
 
     const payload = {
       registration_type: regType,
       registrant: {
         name: registrant.name.trim(),
         surname: registrant.surname.trim(),
-        ...(ageNum !== undefined && { age: ageNum }),
         phone: registrant.phone.trim(),
         email: registrant.email.trim(),
-        is_attendee: registrant.is_attendee,
-        transportation: registrant.transportation,
+        is_attendee: isAttendee,
+        ...(isAttendee && {
+          accommodation: registrant.accommodation as Accommodation,
+          recreation_voucher: registrant.recreationVoucher,
+          ...(registrant.roommatePreference.trim() && {
+            roommate_preference: registrant.roommatePreference.trim(),
+          }),
+        }),
       },
-      attendees: attendees.map((a) => {
-        const aAge = parseInt(a.age, 10);
-        return {
-          name: a.name.trim(),
-          surname: a.surname.trim(),
-          age: aAge,
-          ...(a.phone.trim() && { phone: a.phone.trim() }),
-          ...(a.email.trim() && { email: a.email.trim() }),
-        };
-      }),
+      attendees: isOnlyMe
+        ? []
+        : attendees.map((a) => ({
+            name: a.name.trim(),
+            surname: a.surname.trim(),
+            accommodation: a.accommodation as Accommodation,
+            recreation_voucher: a.recreationVoucher,
+            ...(a.roommatePreference.trim() && {
+              roommate_preference: a.roommatePreference.trim(),
+            }),
+            ...(a.phone.trim() && { phone: a.phone.trim() }),
+            ...(a.email.trim() && { email: a.email.trim() }),
+          })),
       ...(note.trim() && { note: note.trim() }),
+      extra_contribution: isNaN(extra) || extra < 0 ? 0 : extra,
     };
 
     setSaveState("saving");
@@ -350,37 +305,49 @@ export default function RegistrationUpdatePage() {
 
   // ── Live price preview ───────────────────────────────────────────────────
 
-  const pricingAttendees: { name: string; surname: string; age: number }[] = [];
-  if (isMeAndOthers || isOnlyMe) {
-    const age = parseInt(registrant.age, 10);
-    if (!isNaN(age) && age >= 0 && age <= 120) {
-      pricingAttendees.push({
-        name: registrant.name || "–",
-        surname: registrant.surname || "",
-        age,
-      });
-    }
-  }
-  for (const a of attendees) {
-    const age = parseInt(a.age, 10);
-    if (!isNaN(age) && age >= 0 && age <= 120) {
-      pricingAttendees.push({
-        name: a.name || "–",
-        surname: a.surname || "",
-        age,
-      });
-    }
-  }
+  const pricePeople = toPricePeople(
+    registrant,
+    attendees,
+    isAttendee,
+    !isOnlyMe,
+  );
+  const parsedExtra = parseInt(extraContribution, 10);
   const priceBreakdown =
-    pricingAttendees.length > 0 ? calculatePrice(pricingAttendees) : null;
+    pricePeople.length > 0 || parsedExtra > 0
+      ? calculatePrice(pricePeople, isNaN(parsedExtra) ? 0 : parsedExtra)
+      : null;
 
   // ── State screens ────────────────────────────────────────────────────────
+
+  function StatusScreen({
+    title,
+    children,
+  }: {
+    title: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <main className="reg-form-page">
+        <div className="reg-form-page__inner">
+          <h1 className="reg-form-page__title">{title}</h1>
+          <p>{children}</p>
+          <button
+            className="reg-form__submit"
+            style={{ marginTop: "2rem" }}
+            onClick={() => navigate("/")}
+          >
+            Späť na hlavnú stránku
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   if (loadState === "loading") {
     return (
       <main className="reg-form-page">
         <div className="reg-form-page__inner">
-          <p>Načítavam registráciu…</p>
+          <p>Načítavam prihlášku…</p>
         </div>
       </main>
     );
@@ -388,58 +355,27 @@ export default function RegistrationUpdatePage() {
 
   if (loadState === "not-found") {
     return (
-      <main className="reg-form-page">
-        <div className="reg-form-page__inner">
-          <h1 className="reg-form-page__title">Neplatný odkaz</h1>
-          <p>
-            Registrácia nebola nájdená. Skontrolujte odkaz, ktorý ste dostali v
-            e-maile.
-          </p>
-          <button
-            className="reg-form__submit"
-            style={{ marginTop: "2rem" }}
-            onClick={() => navigate("/")}
-          >
-            Späť na hlavnú stránku
-          </button>
-        </div>
-      </main>
+      <StatusScreen title="Neplatný odkaz">
+        Prihláška nebola nájdená. Skontrolujte odkaz, ktorý ste dostali v
+        e-maile.
+      </StatusScreen>
     );
   }
 
   if (loadState === "paid") {
     return (
-      <main className="reg-form-page">
-        <div className="reg-form-page__inner">
-          <h1 className="reg-form-page__title">Registrácia je zaplatená</h1>
-          <p>Zmeny nie sú možné po uhradení platby za tábor.</p>
-          <button
-            className="reg-form__submit"
-            style={{ marginTop: "2rem" }}
-            onClick={() => navigate("/")}
-          >
-            Späť na hlavnú stránku
-          </button>
-        </div>
-      </main>
+      <StatusScreen title="Prihláška je uhradená">
+        Po uhradení platby už nie je možné prihlášku meniť. Ak potrebujete zmenu,
+        kontaktujte nás prosím e-mailom.
+      </StatusScreen>
     );
   }
 
   if (loadState === "cancelled") {
     return (
-      <main className="reg-form-page">
-        <div className="reg-form-page__inner">
-          <h1 className="reg-form-page__title">Registrácia bola zrušená</h1>
-          <p>Táto registrácia bola zrušená a nie je možné ju upravovať.</p>
-          <button
-            className="reg-form__submit"
-            style={{ marginTop: "2rem" }}
-            onClick={() => navigate("/")}
-          >
-            Späť na hlavnú stránku
-          </button>
-        </div>
-      </main>
+      <StatusScreen title="Prihláška bola zrušená">
+        Táto prihláška bola zrušená a nie je možné ju upravovať.
+      </StatusScreen>
     );
   }
 
@@ -448,12 +384,12 @@ export default function RegistrationUpdatePage() {
       <main className="reg-form-page">
         <div className="reg-form-page__inner">
           <div className="reg-form-page__success">
-            <p className="reg-form-page__success-icon">✅</p>
             <h1 className="reg-form-page__success-title">
-              Registrácia bola zrušená.
+              Prihláška bola zrušená
             </h1>
             <p className="reg-form-page__success-text">
-              Vaša registrácia na tábor bola úspešne zrušená.
+              Vaša prihláška na vzdelávanie bola zrušená. Ak ste ju zrušili
+              omylom, prihláste sa prosím znova.
             </p>
             <button
               className="reg-form__submit"
@@ -468,17 +404,20 @@ export default function RegistrationUpdatePage() {
     );
   }
 
-  const registrantLabel = isMeAndOthers
+  const registrantLabel = isAttendee
     ? "Účastník (platiteľ)"
     : "Kontaktná osoba (platiteľ)";
+
+  const showRegistrantVoucher =
+    isAttendee &&
+    registrant.accommodation !== "" &&
+    qualifiesForVoucher(registrant.accommodation);
 
   return (
     <main className="reg-form-page">
       <div className="reg-form-page__inner">
-        <h1 className="reg-form-page__title">Úprava registrácie</h1>
-        <p className="reg-form-page__subtitle">
-          Detský biblický tábor · ECAV Obišovce · 26.–31. júla 2026
-        </p>
+        <h1 className="reg-form-page__title">Úprava prihlášky</h1>
+        <p className="reg-form-page__subtitle">{EVENT_SUBTITLE}</p>
 
         <form onSubmit={handleSave} noValidate className="reg-form">
           {/* ── Registrant ──────────────────────────────── */}
@@ -525,28 +464,6 @@ export default function RegistrationUpdatePage() {
               </div>
             </div>
 
-            {includeAge && (
-              <div className="form-field form-field--narrow">
-                <label className="form-label" htmlFor="reg-age">
-                  Vek <span className="form-required">*</span>
-                </label>
-                <input
-                  id="reg-age"
-                  type="number"
-                  min={0}
-                  max={120}
-                  className={`form-input${registrantErrors.age ? " is-invalid" : ""}`}
-                  value={registrant.age}
-                  onChange={(e) =>
-                    handleRegistrantChange("age", e.target.value)
-                  }
-                />
-                {registrantErrors.age && (
-                  <p className="form-error">{registrantErrors.age}</p>
-                )}
-              </div>
-            )}
-
             <div className="form-row">
               <div className="form-field">
                 <label className="form-label" htmlFor="reg-phone">
@@ -577,7 +494,7 @@ export default function RegistrationUpdatePage() {
                   type="email"
                   className={`form-input${registrantErrors.email || isEmailTaken ? " is-invalid" : ""}`}
                   value={registrant.email}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  onChange={(e) =>
                     handleRegistrantChange("email", e.target.value)
                   }
                   onBlur={handleEmailBlur}
@@ -589,61 +506,103 @@ export default function RegistrationUpdatePage() {
                 )}
                 {!registrantErrors.email && isEmailTaken && (
                   <p className="form-error">
-                    Tento e-mail je už zaregistrovaný. Zadajte iný e-mail alebo
+                    Tento e-mail je už prihlásený. Zadajte iný e-mail alebo
                     použite pôvodný.
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="form-field">
-              <label className="form-label">
-                Doprava <span className="form-required">*</span>
-              </label>
-              <div className="form-radio-group">
-                <label className="form-radio-option">
-                  <input
-                    type="radio"
-                    name="transportation"
-                    value="individual"
-                    checked={registrant.transportation === "individual"}
-                    onChange={(e) =>
-                      handleRegistrantChange("transportation", e.target.value)
-                    }
-                  />
-                  <span>Individuálna doprava</span>
-                </label>
-                <label className="form-radio-option">
-                  <input
-                    type="radio"
-                    name="transportation"
-                    value="train_with_organizer"
-                    checked={
-                      registrant.transportation === "train_with_organizer"
-                    }
-                    onChange={(e) =>
-                      handleRegistrantChange("transportation", e.target.value)
-                    }
-                  />
-                  <span>Doprava vlakom s organizátorom</span>
-                </label>
-              </div>
-              {registrantErrors.transportation && (
-                <p className="form-error">{registrantErrors.transportation}</p>
-              )}
-            </div>
+            {isAttendee && (
+              <>
+                <div className="form-field">
+                  <label className="form-label">
+                    Ubytovanie a strava <span className="form-required">*</span>
+                  </label>
+                  <div className="form-radio-group form-radio-group--stacked">
+                    {ACCOMMODATION_ORDER.map((option) => (
+                      <label className="form-radio-option" key={option}>
+                        <input
+                          type="radio"
+                          name="reg-accommodation"
+                          value={option}
+                          checked={registrant.accommodation === option}
+                          onChange={() =>
+                            handleRegistrantChange("accommodation", option)
+                          }
+                        />
+                        <span>
+                          <span className="form-radio-option__main">
+                            {ACCOMMODATION_LABEL[option]}
+                            <span className="form-radio-option__price">
+                              {ACCOMMODATION_PRICE[option]}&nbsp;€
+                            </span>
+                          </span>
+                          <span className="form-radio-option__note">
+                            {ACCOMMODATION_NOTE[option]}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {registrantErrors.accommodation && (
+                    <p className="form-error">
+                      {registrantErrors.accommodation}
+                    </p>
+                  )}
+                </div>
+
+                {registrant.accommodation === "double" && (
+                  <div className="form-field">
+                    <label className="form-label" htmlFor="reg-roommate">
+                      Preferovaný spolubývajúci{" "}
+                      <span className="form-optional">(nepovinné)</span>
+                    </label>
+                    <input
+                      id="reg-roommate"
+                      type="text"
+                      className="form-input"
+                      value={registrant.roommatePreference}
+                      onChange={(e) =>
+                        handleRegistrantChange(
+                          "roommatePreference",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="Meno a priezvisko"
+                    />
+                  </div>
+                )}
+
+                {showRegistrantVoucher && (
+                  <div className="form-field">
+                    <label className="form-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={registrant.recreationVoucher}
+                        onChange={(e) =>
+                          handleRegistrantChange(
+                            "recreationVoucher",
+                            e.target.checked,
+                          )
+                        }
+                      />
+                      <span>
+                        Mám záujem uplatniť si rekreačný poukaz u zamestnávateľa
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </>
+            )}
           </section>
 
           {/* ── Attendees ───────────────────────────────── */}
           {!isOnlyMe && (
             <section className="reg-form__section">
               <h2 className="reg-form__section-title">
-                {isMeAndOthers ? "Ďalší účastníci" : "Účastníci"}
+                {isAttendee ? "Ďalší účastníci" : "Účastníci"}
               </h2>
-              <p className="reg-form__section-note">
-                Pre účastníkov starších ako 14 rokov môžete uviesť telefón a
-                e-mail.
-              </p>
 
               {attendees.map((attendee, i) => (
                 <AttendeeForm
@@ -668,6 +627,27 @@ export default function RegistrationUpdatePage() {
             </section>
           )}
 
+          {/* ── Voluntary contribution ──────────────────── */}
+          <section className="reg-form__section">
+            <h2 className="reg-form__section-title">Dobrovoľný príspevok</h2>
+            <div className="form-field form-field--narrow">
+              <label className="form-label" htmlFor="reg-extra">
+                Suma navyše v €{" "}
+                <span className="form-optional">(nepovinné)</span>
+              </label>
+              <input
+                id="reg-extra"
+                type="number"
+                min={0}
+                step={1}
+                className="form-input"
+                value={extraContribution}
+                onChange={(e) => setExtraContribution(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+          </section>
+
           {/* ── Note ──────────────────────────────────────── */}
           <section className="reg-form__section">
             <h2 className="reg-form__section-title">Poznámka</h2>
@@ -678,7 +658,7 @@ export default function RegistrationUpdatePage() {
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Napr.: Peter je alergický na orechy, Jana berie každý deň lieky na astmu..."
+                placeholder="Napr.: prídem až v sobotu ráno, mám bezlepkovú diétu…"
               />
             </div>
           </section>
@@ -687,37 +667,27 @@ export default function RegistrationUpdatePage() {
           {priceBreakdown && (
             <div className="price-preview">
               <h2 className="price-preview__title">Predbežná cena</h2>
-              {priceBreakdown.isLatePeriod && (
-                <p className="price-preview__late-note">
-                  Registrácia po 1. júla — ceny sú zvýšené o 10&nbsp;€.
-                </p>
-              )}
               <ul className="price-preview__list">
                 {priceBreakdown.items.map((item, i) => (
                   <li key={i} className="price-preview__item">
                     <span className="price-preview__item-label">
-                      {item.name} ({item.age} r.) –{" "}
-                      {CATEGORY_LABEL[item.category]}
-                      {item.lateFee > 0 && (
-                        <span className="price-preview__late-fee">
-                          {" "}
-                          +{item.lateFee}&nbsp;€
-                        </span>
-                      )}
-                      {item.discount > 0 && (
-                        <span className="price-preview__discount">
-                          {" "}
-                          &minus;{item.discount}&nbsp;€
-                        </span>
-                      )}
+                      {item.name} – {ACCOMMODATION_LABEL[item.accommodation]}
                     </span>
                     <span className="price-preview__item-price">
-                      {item.finalPrice === 0
-                        ? "zadarmo"
-                        : `${item.finalPrice}\u00a0€`}
+                      {item.price === 0 ? "bez poplatku" : `${item.price} €`}
                     </span>
                   </li>
                 ))}
+                {priceBreakdown.extraContribution > 0 && (
+                  <li className="price-preview__item">
+                    <span className="price-preview__item-label">
+                      Dobrovoľný príspevok
+                    </span>
+                    <span className="price-preview__item-price">
+                      {priceBreakdown.extraContribution}&nbsp;€
+                    </span>
+                  </li>
+                )}
               </ul>
               <div className="price-preview__total">
                 <span>Spolu</span>
@@ -729,24 +699,24 @@ export default function RegistrationUpdatePage() {
           {/* ── Save feedback ────────────────────────────── */}
           {saveState === "saved" && (
             <p className="reg-form__submit-success">
-              ✅ Registrácia bola aktualizovaná.
+              Prihláška bola aktualizovaná.
             </p>
           )}
           {saveState === "error" && (
             <p className="reg-form__submit-error">
-              ❌ Uloženie zlyhalo. Skúste to prosím znova.
+              Uloženie zlyhalo. Skúste to prosím znova.
             </p>
           )}
           {saveState === "locked" && (
             <p className="reg-form__submit-error">
-              ❌ Registrácia je uzavretá, zmeny nie sú možné.
+              Prihláška je uzavretá, zmeny nie sú možné.
             </p>
           )}
 
           {/* ── Cancel feedback ──────────────────────────── */}
           {cancelState === "locked" && (
             <p className="reg-form__submit-error">
-              ❌ Registrácia je uzavretá, zrušenie nie je možné.
+              Prihláška je uzavretá, zrušenie nie je možné.
             </p>
           )}
 
@@ -765,36 +735,28 @@ export default function RegistrationUpdatePage() {
         </form>
 
         {/* ── Cancel registration ──────────────────────── */}
-        <div
-          style={{
-            marginTop: "3rem",
-            borderTop: "1px solid #e5e7eb",
-            paddingTop: "2rem",
-          }}
-        >
+        <div className="reg-cancel">
           {cancelState === "idle" && (
             <button
               type="button"
-              className="reg-summary__back-btn"
-              style={{ color: "#dc2626" }}
+              className="reg-cancel__trigger"
               onClick={() => setCancelState("confirming")}
             >
-              Zrušiť registráciu
+              Zrušiť prihlášku
             </button>
           )}
           {cancelState === "confirming" && (
             <div>
               <p style={{ marginBottom: "1rem" }}>
-                Naozaj chcete zrušiť registráciu? Táto akcia je nevratná.
+                Naozaj chcete zrušiť prihlášku? Táto akcia je nevratná.
               </p>
-              <div style={{ display: "flex", gap: "1rem" }}>
+              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  className="reg-form__submit"
-                  style={{ background: "#dc2626" }}
+                  className="reg-form__submit reg-form__submit--danger"
                   onClick={handleCancelConfirm}
                 >
-                  Áno, zrušiť registráciu
+                  Áno, zrušiť prihlášku
                 </button>
                 <button
                   type="button"
@@ -806,7 +768,7 @@ export default function RegistrationUpdatePage() {
               </div>
             </div>
           )}
-          {cancelState === "cancelling" && <p>Zrušujem registráciu…</p>}
+          {cancelState === "cancelling" && <p>Ruším prihlášku…</p>}
         </div>
       </div>
     </main>

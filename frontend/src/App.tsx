@@ -9,6 +9,7 @@ import AttendeeTablePage from "./pages/AttendeeTablePage";
 import PaymentInfoPage from "./pages/PaymentInfoPage";
 import { RegistrationProvider } from "./context/RegistrationContext";
 import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
+import { CONTACT_EMAIL, CONTACT_PHONE, CONTACT_PHONE_HREF } from "./eventInfo";
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAdminAuth();
@@ -79,8 +80,9 @@ function App() {
       </Routes>
       <footer>
         <p>
-          © {new Date().getFullYear()} Detský biblický tábor · ECAV Obišovce.
-          Všetky práva vyhradené.
+          © {new Date().getFullYear()} Evanjelizačné stredisko (EVS) ·{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> ·{" "}
+          <a href={`tel:${CONTACT_PHONE_HREF}`}>{CONTACT_PHONE}</a>
         </p>
       </footer>
     </AdminAuthProvider>
