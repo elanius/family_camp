@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
@@ -169,6 +169,8 @@ class AdminRegistrationItem(BaseModel):
     variable_symbol: Optional[str] = None
     # Amount actually sent in the payment e-mail; overrides the calculated price.
     payment_amount: Optional[int] = None
+    # Day the payment arrived, as recorded by the admin.
+    payment_received_at: Optional[date] = None
 
 
 class PaymentInfoResponse(BaseModel):
@@ -183,6 +185,20 @@ class PaymentInfoResponse(BaseModel):
     qr_string: str
     # Price computed from the packages + contribution, for comparison with `amount`.
     calculated_amount: int
+
+
+class AdminActionRequest(BaseModel):
+    """Optional body for POST /registrations/{id}/action/{action}."""
+
+    # Only used by "payment_received"; defaults to today when omitted.
+    payment_received_at: Optional[date] = None
+
+    @field_validator("payment_received_at")
+    @classmethod
+    def not_in_the_future(cls, v: Optional[date]) -> Optional[date]:
+        if v is not None and v > datetime.now(timezone.utc).date():
+            raise ValueError("payment_received_at cannot be in the future.")
+        return v
 
 
 class SendPaymentInfoRequest(BaseModel):

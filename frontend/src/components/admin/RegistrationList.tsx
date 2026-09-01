@@ -58,6 +58,27 @@ export interface RegistrationItem {
   update_token: string;
   /** Amount actually sent in the payment e-mail; overrides the calculated price. */
   payment_amount?: number | null;
+  /** Day the payment arrived, "YYYY-MM-DD". */
+  payment_received_at?: string | null;
+}
+
+/** Today as "YYYY-MM-DD" in the admin's own timezone, not UTC. */
+export function todayISO(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/** Format a "YYYY-MM-DD" date without letting the timezone shift the day. */
+function formatISODate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString("sk-SK", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 /** The price the registrant was actually asked to pay, falling back to the calculation. */
@@ -164,6 +185,8 @@ function RegistrationRow({
   const navigate = useNavigate();
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Non-null while the admin is picking the day the payment arrived.
+  const [receivedDate, setReceivedDate] = useState<string | null>(null);
 
   const actions = STATUS_ACTIONS[item.status];
   const reg = item.registrant;
@@ -177,9 +200,16 @@ function RegistrationRow({
   // The admin may have edited the amount before sending the payment e-mail.
   const amountOverridden = amount !== pricing.total;
 
-  async function handleAction(action: Action) {
+  async function handleAction(action: Action, paymentDate?: string) {
     if (action === "send_payment_info") {
       navigate(`/admin/payment/${item.id}`);
+      return;
+    }
+
+    // Ask for the date first; the second call arrives with it filled in.
+    if (action === "payment_received" && paymentDate === undefined) {
+      setError(null);
+      setReceivedDate(todayISO());
       return;
     }
 
@@ -200,17 +230,29 @@ function RegistrationRow({
         `${API_BASE}/api/admin/registrations/${item.id}/action/${action}`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(paymentDate && { "Content-Type": "application/json" }),
+          },
+          ...(paymentDate && {
+            body: JSON.stringify({ payment_received_at: paymentDate }),
+          }),
         },
       );
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.detail ?? "Action failed.");
+        const body = (await res.json().catch(() => ({}))) as {
+          detail?: unknown;
+        };
+        // A 422 answers with a list of issues, which is not renderable as-is.
+        setError(
+          typeof body.detail === "string" ? body.detail : "Action failed.",
+        );
         return;
       }
 
       const updated: RegistrationItem = await res.json();
+      setReceivedDate(null);
       onUpdate(updated);
     } catch {
       setError("Network error. Please try again.");
@@ -267,6 +309,11 @@ function RegistrationRow({
                 </span>
               )}
               <span className="text-gray-400">{regDate}</span>
+              {item.payment_received_at && (
+                <span className="text-blue-700" title="Payment received">
+                  ✓ paid {formatISODate(item.payment_received_at)}
+                </span>
+              )}
               {item.update_token && (
                 <a
                   href={`/update/${item.update_token}`}
@@ -296,6 +343,41 @@ function RegistrationRow({
             </div>
           )}
         </div>
+
+        {receivedDate !== null && (
+          <div className="mt-3 flex flex-wrap items-end gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5">
+            <div>
+              <label
+                className="block text-xs font-medium text-gray-600 mb-1"
+                htmlFor={`received-${item.id}`}
+              >
+                Payment received on
+              </label>
+              <input
+                id={`received-${item.id}`}
+                type="date"
+                value={receivedDate}
+                max={todayISO()}
+                onChange={(e) => setReceivedDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              onClick={() => handleAction("payment_received", receivedDate)}
+              disabled={busy !== null || !receivedDate}
+              className="text-xs font-medium px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+            >
+              {busy === "payment_received" ? "…" : "Confirm"}
+            </button>
+            <button
+              onClick={() => setReceivedDate(null)}
+              disabled={busy !== null}
+              className="text-xs font-medium px-3 py-2 rounded-lg text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
 
         {error && (
           <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">

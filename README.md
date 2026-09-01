@@ -154,6 +154,10 @@ Stavy prihlášky: `new → wait_for_payment → paid → accepted`, kedykoľvek
 platobných informácií (`wait_for_payment`) sa prihláška uzavrie, aby sa
 nerozišla s už oznámenou sumou.
 
+Pri označení platby ako prijatej vyberá administrátor v kalendári **dátum
+prijatia platby** (predvolene dnešok, spätne ľubovoľný starší deň, budúce dátumy
+sú odmietnuté). Ukladá sa do `payment_received_at`.
+
 Platba má pre celé podujatie **pevný variabilný symbol `022026`**
 (`FIXED_VARIABLE_SYMBOL` v [`backend/app/routers/admin.py`](backend/app/routers/admin.py));
 platby sa párujú cez **správu pre príjemcu**, ktorá obsahuje celé meno

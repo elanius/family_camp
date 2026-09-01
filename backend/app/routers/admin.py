@@ -1,6 +1,7 @@
 import io
 import logging
-from typing import Literal
+from datetime import date, datetime, time, timezone
+from typing import Literal, Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -10,6 +11,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.config import get_settings
 from app.database import get_db
 from app.models import (
+    AdminActionRequest,
     AdminRegistrationItem,
     PaymentInfoResponse,
     QrStringRequest,
@@ -71,6 +73,15 @@ def _voucher_claimed(doc: dict) -> bool:
     return any(a.get("recreation_voucher") for a in doc.get("attendees", []))
 
 
+def _as_date(value: object) -> Optional[date]:
+    """Mongo hands back a datetime; the API exposes a plain date."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
 def _doc_to_item(doc: dict) -> AdminRegistrationItem:
     return AdminRegistrationItem(
         id=str(doc["_id"]),
@@ -86,6 +97,7 @@ def _doc_to_item(doc: dict) -> AdminRegistrationItem:
         update_token=doc.get("update_token", ""),
         variable_symbol=doc.get("variable_symbol"),
         payment_amount=doc.get("payment_amount"),
+        payment_received_at=_as_date(doc.get("payment_received_at")),
     )
 
 
@@ -174,6 +186,7 @@ async def list_registrations(
 async def apply_action(
     reg_id: str,
     action: AdminAction,
+    body: Optional[AdminActionRequest] = None,
     _: str = Depends(get_current_admin),
 ) -> AdminRegistrationItem:
     try:
@@ -198,7 +211,19 @@ async def apply_action(
         )
 
     new_status = _ACTION_RESULT[action]
-    await collection.update_one({"_id": oid}, {"$set": {"status": new_status}})
+    changes: dict = {"status": new_status}
+
+    if action == "payment_received":
+        # Default to today; the admin may back-date it to when the money arrived.
+        received_on = (body.payment_received_at if body else None) or datetime.now(
+            timezone.utc
+        ).date()
+        # BSON has no date type — store midnight UTC and read it back as a date.
+        changes["payment_received_at"] = datetime.combine(
+            received_on, time.min, tzinfo=timezone.utc
+        )
+
+    await collection.update_one({"_id": oid}, {"$set": changes})
 
     if action == "send_payment_info":
         registrant = doc["registrant"]
@@ -223,7 +248,7 @@ async def apply_action(
         except Exception:
             logger.warning("Payment received email failed for %s – status already updated.", registrant["email"])
 
-    doc["status"] = new_status
+    doc.update(changes)
     return _doc_to_item(doc)
 
 
