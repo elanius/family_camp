@@ -4,6 +4,7 @@ import smtplib
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html import escape
 
 from app.config import get_settings
 
@@ -142,18 +143,28 @@ async def send_registration_confirmation(to_email: str) -> None:
 
 
 def _build_full_registration_message(
-    sender: str, to_email: str, registrant_name: str, attendee_count: int, update_link: str
+    sender: str, to_email: str, registrant_name: str, attendee_names: list[str], update_link: str
 ) -> MIMEMultipart:
     message = MIMEMultipart("alternative")
     message["Subject"] = f"{EVENT_NAME} – potvrdenie prihlášky"
     message["From"] = sender
     message["To"] = to_email
 
-    if attendee_count > 0:
-        attendee_word = "účastníkov" if attendee_count != 1 else "účastníka"
-        attendee_line_text = f"Okrem seba ste prihlásili {attendee_count} {attendee_word}.\n"
+    count = len(attendee_names)
+    if count > 0:
+        person_word = "osoba" if count == 1 else ("osoby" if count < 5 else "osôb")
+        heading = f"Prihlásili ste {count} {person_word}:"
+        attendee_line_text = (
+            heading + "\n" + "".join(f"  – {n}\n" for n in attendee_names)
+        )
+        list_items = "".join(
+            f"        <li>{escape(n)}</li>\n" for n in attendee_names
+        )
         attendee_line_html = (
-            f'      <p>Okrem seba ste prihlásili <strong>{attendee_count} {attendee_word}</strong>.</p>\n'
+            f"      <p>{heading}</p>\n"
+            f'      <ul style="margin: 0.5rem 0 1.25rem; padding-left: 1.25rem;">\n'
+            f"{list_items}"
+            "      </ul>\n"
         )
     else:
         attendee_line_text = ""
@@ -171,7 +182,8 @@ Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.
 
 Informácie k úhrade vám pošleme v samostatnom e-maile.
 
-Prihlášku môžete kedykoľvek upraviť alebo zrušiť cez tento odkaz:
+Prihlášku môžete upraviť alebo zrušiť cez tento odkaz — platí do chvíle,
+kým vám pošleme informácie k úhrade:
 {update_link}
 
 {SIGNATURE_TEXT}"""
@@ -198,7 +210,8 @@ Prihlášku môžete kedykoľvek upraviť alebo zrušiť cez tento odkaz:
       <p>Informácie k úhrade vám pošleme v samostatnom e-maile.</p>
 
       <p>
-        Prihlášku môžete kedykoľvek upraviť alebo zrušiť cez tento odkaz:<br>
+        Prihlášku môžete upraviť alebo zrušiť cez tento odkaz — platí do chvíle,
+        kým vám pošleme informácie k úhrade:<br>
         <a href="{update_link}">{update_link}</a>
       </p>
 
@@ -210,23 +223,23 @@ Prihlášku môžete kedykoľvek upraviť alebo zrušiť cez tento odkaz:
 
 
 def _send_full_registration_via_smtp(
-    to_email: str, registrant_name: str, attendee_count: int, update_link: str
+    to_email: str, registrant_name: str, attendee_names: list[str], update_link: str
 ) -> None:
     settings = get_settings()
     _smtp_send(
         _build_full_registration_message(
-            settings.gmail_user, to_email, registrant_name, attendee_count, update_link
+            settings.gmail_user, to_email, registrant_name, attendee_names, update_link
         )
     )
 
 
 async def send_full_registration_confirmation(
-    to_email: str, registrant_name: str, attendee_count: int, update_link: str
+    to_email: str, registrant_name: str, attendee_names: list[str], update_link: str
 ) -> None:
     logger.debug("[email] send_full_registration_confirmation called for %s", to_email)
     try:
         await _dispatch(
-            _send_full_registration_via_smtp, to_email, registrant_name, attendee_count, update_link
+            _send_full_registration_via_smtp, to_email, registrant_name, attendee_names, update_link
         )
         logger.info("[email] Full registration confirmation email sent to %s", to_email)
     except Exception:

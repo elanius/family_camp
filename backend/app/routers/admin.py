@@ -1,6 +1,5 @@
 import io
 import logging
-import random
 from typing import Literal
 
 from bson import ObjectId
@@ -25,6 +24,10 @@ from app.services.email import send_payment_info_email, send_payment_received_co
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+# One shared variable symbol for the whole event — payments are matched by the
+# payer's name in the recipient note, not by a per-registration symbol.
+FIXED_VARIABLE_SYMBOL = "022026"
 
 # ── State machine ────────────────────────────────────────────────────────
 
@@ -59,6 +62,15 @@ def _effective_status(doc: dict) -> RegistrationStatus:
     return "new"
 
 
+def _voucher_claimed(doc: dict) -> bool:
+    """Top-level voucher flag, falling back to the legacy per-person flags."""
+    if "recreation_voucher" in doc:
+        return bool(doc["recreation_voucher"])
+    if doc.get("registrant", {}).get("recreation_voucher"):
+        return True
+    return any(a.get("recreation_voucher") for a in doc.get("attendees", []))
+
+
 def _doc_to_item(doc: dict) -> AdminRegistrationItem:
     return AdminRegistrationItem(
         id=str(doc["_id"]),
@@ -67,10 +79,13 @@ def _doc_to_item(doc: dict) -> AdminRegistrationItem:
         attendees=doc.get("attendees", []),
         note=doc.get("note"),
         extra_contribution=doc.get("extra_contribution", 0),
+        recreation_voucher=_voucher_claimed(doc),
+        voucher_billing=doc.get("voucher_billing"),
         status=_effective_status(doc),
         registered_at=doc["registered_at"],
         update_token=doc.get("update_token", ""),
         variable_symbol=doc.get("variable_symbol"),
+        payment_amount=doc.get("payment_amount"),
     )
 
 
@@ -91,18 +106,12 @@ def _calculate_total_amount(
 
 
 async def _ensure_variable_symbol(collection, oid: ObjectId, doc: dict) -> str:
-    if vs := doc.get("variable_symbol"):
-        return str(vs)
-    used: set[str] = set()
-    async for d in collection.find({"variable_symbol": {"$exists": True}}, {"variable_symbol": 1}):
-        if v := d.get("variable_symbol"):
-            used.add(str(v))
-    available = [str(i) for i in range(100, 1000) if str(i) not in used]
-    if not available:
-        raise HTTPException(status_code=500, detail="No variable symbols available.")
-    vs = random.choice(available)
-    await collection.update_one({"_id": oid}, {"$set": {"variable_symbol": vs}})
-    return vs
+    """Store and return the event-wide variable symbol for this registration."""
+    if doc.get("variable_symbol") != FIXED_VARIABLE_SYMBOL:
+        await collection.update_one(
+            {"_id": oid}, {"$set": {"variable_symbol": FIXED_VARIABLE_SYMBOL}}
+        )
+    return FIXED_VARIABLE_SYMBOL
 
 
 def _qr_png_bytes(data: str) -> bytes:
@@ -240,11 +249,15 @@ async def get_payment_info(
     settings = get_settings()
     vs = await _ensure_variable_symbol(collection, oid, doc)
     registrant = doc["registrant"]
-    amount = _calculate_total_amount(
+    calculated_amount = _calculate_total_amount(
         registrant, doc.get("attendees", []), doc.get("extra_contribution", 0)
     )
+    # A previously sent amount wins — that is what the registrant was asked to pay.
+    stored_amount = doc.get("payment_amount")
+    amount = int(stored_amount) if stored_amount is not None else calculated_amount
+    # The recipient note carries the payer's full name; the symbol is the same for all.
     full_name = f"{registrant['name']} {registrant['surname']}"
-    recipient_note = f"{full_name} {vs}"
+    recipient_note = full_name
     qr_string = _generate_bysquare_string(settings.bank_iban, amount, vs, recipient_note, settings.bank_beneficiary)
 
     return PaymentInfoResponse(
@@ -257,6 +270,7 @@ async def get_payment_info(
         registrant_email=registrant["email"],
         attendee_count=len(doc.get("attendees", [])),
         qr_string=qr_string,
+        calculated_amount=calculated_amount,
     )
 
 
@@ -299,7 +313,13 @@ async def send_payment_info_endpoint(
     new_status: RegistrationStatus = "wait_for_payment"
     await collection.update_one(
         {"_id": oid},
-        {"$set": {"status": new_status, "variable_symbol": body.variable_symbol}},
+        {
+            "$set": {
+                "status": new_status,
+                "variable_symbol": body.variable_symbol,
+                "payment_amount": body.amount,
+            }
+        },
     )
 
     registrant = doc["registrant"]
@@ -320,4 +340,5 @@ async def send_payment_info_endpoint(
 
     doc["status"] = new_status
     doc["variable_symbol"] = body.variable_symbol
+    doc["payment_amount"] = body.amount
     return _doc_to_item(doc)

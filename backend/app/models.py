@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 class EmailRegistration(BaseModel):
@@ -33,7 +33,6 @@ class AttendeeData(BaseModel):
     accommodation: Accommodation
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
-    recreation_voucher: bool = False
     roommate_preference: Optional[str] = None
 
     @field_validator("phone")
@@ -53,7 +52,6 @@ class RegistrantData(BaseModel):
     email: EmailStr
     is_attendee: bool
     accommodation: Optional[Accommodation] = None
-    recreation_voucher: bool = False
     roommate_preference: Optional[str] = None
 
     @field_validator("phone")
@@ -66,6 +64,16 @@ class RegistrantData(BaseModel):
         return v
 
 
+class VoucherBilling(BaseModel):
+    """Billing address the hotel invoices when the registrant uses a recreation voucher."""
+
+    name: str = Field(min_length=1)
+    surname: str = Field(min_length=1)
+    address: str = Field(min_length=1)
+    city: str = Field(min_length=1)
+    postal_code: str = Field(min_length=1)
+
+
 class RegistrationRequest(BaseModel):
     registration_type: RegistrationType
     registrant: RegistrantData
@@ -73,6 +81,10 @@ class RegistrationRequest(BaseModel):
     note: Optional[str] = None
     # Voluntary contribution on top of the accommodation price, in whole euros.
     extra_contribution: int = Field(default=0, ge=0, le=10000)
+    # Recreation voucher belongs to the registrant, so it lives on the registration
+    # itself — only "only_me" and "me_and_others" may claim it.
+    recreation_voucher: bool = False
+    voucher_billing: Optional[VoucherBilling] = None
 
     @field_validator("attendees")
     @classmethod
@@ -90,6 +102,20 @@ class RegistrationRequest(BaseModel):
             raise ValueError("accommodation is required when the registrant attends.")
         return v
 
+    # A model validator, not a field one: `voucher_billing` may be missing entirely,
+    # and field validators do not run for defaults.
+    @model_validator(mode="after")
+    def validate_voucher(self) -> "RegistrationRequest":
+        if not self.recreation_voucher:
+            # Not claimed – drop any billing data that came along.
+            self.voucher_billing = None
+            return self
+        if not self.registrant.is_attendee:
+            raise ValueError("recreation_voucher requires the registrant to attend.")
+        if self.voucher_billing is None:
+            raise ValueError("voucher_billing is required when recreation_voucher is set.")
+        return self
+
 
 class RegistrationRecord(BaseModel):
     registration_type: RegistrationType
@@ -97,6 +123,8 @@ class RegistrationRecord(BaseModel):
     attendees: list[AttendeeData]
     note: Optional[str] = None
     extra_contribution: int = 0
+    recreation_voucher: bool = False
+    voucher_billing: Optional[VoucherBilling] = None
     registered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     update_token: str
     status: RegistrationStatus = "new"
@@ -110,8 +138,12 @@ class RegistrationTokenResponse(BaseModel):
     attendees: list[AttendeeData]
     note: Optional[str] = None
     extra_contribution: int = 0
+    recreation_voucher: bool = False
+    voucher_billing: Optional[VoucherBilling] = None
     is_paid: bool
     cancelled: bool
+    # True once payment info was sent – the public update link stops working then.
+    locked: bool = False
 
 
 # ── Admin models ─────────────────────────────────────────────────────────
@@ -129,10 +161,14 @@ class AdminRegistrationItem(BaseModel):
     attendees: list[AttendeeData]
     note: Optional[str] = None
     extra_contribution: int = 0
+    recreation_voucher: bool = False
+    voucher_billing: Optional[VoucherBilling] = None
     status: RegistrationStatus
     registered_at: datetime
     update_token: str = ""
     variable_symbol: Optional[str] = None
+    # Amount actually sent in the payment e-mail; overrides the calculated price.
+    payment_amount: Optional[int] = None
 
 
 class PaymentInfoResponse(BaseModel):
@@ -145,6 +181,8 @@ class PaymentInfoResponse(BaseModel):
     registrant_email: str
     attendee_count: int
     qr_string: str
+    # Price computed from the packages + contribution, for comparison with `amount`.
+    calculated_amount: int
 
 
 class SendPaymentInfoRequest(BaseModel):

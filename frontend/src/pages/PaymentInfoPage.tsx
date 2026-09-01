@@ -15,6 +15,7 @@ interface PaymentInfo {
   registrant_email: string;
   attendee_count: number;
   qr_string: string;
+  calculated_amount: number;
 }
 
 const DEBOUNCE_MS = 600;
@@ -37,6 +38,7 @@ export default function PaymentInfoPage() {
   const [variableSymbol, setVariableSymbol] = useState("");
   const [recipientNote, setRecipientNote] = useState("");
   const [qrString, setQrString] = useState("");
+  const [calculatedAmount, setCalculatedAmount] = useState(0);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,6 +61,7 @@ export default function PaymentInfoPage() {
         setVariableSymbol(data.variable_symbol);
         setRecipientNote(data.recipient_note);
         setQrString(data.qr_string);
+        setCalculatedAmount(data.calculated_amount);
       })
       .catch((e: unknown) => setFetchError((e as Error).message))
       .finally(() => setLoading(false));
@@ -184,6 +187,12 @@ export default function PaymentInfoPage() {
               onChange={(e) => setAmount(Number(e.target.value))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
+            {amount !== calculatedAmount && (
+              <p className="mt-1 text-xs text-amber-700">
+                Differs from the calculated price €{calculatedAmount}. The amount
+                you send here becomes the registration&rsquo;s price.
+              </p>
+            )}
           </div>
 
           <div>
@@ -197,7 +206,9 @@ export default function PaymentInfoPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Note for recipient</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Note for recipient
+            </label>
             <input
               type="text"
               value={recipientNote}

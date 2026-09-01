@@ -84,7 +84,7 @@ test.describe("Registration form validation", () => {
     await expect(page.getByText("Účastník 2")).not.toBeVisible();
   });
 
-  test("blocks submission when the e-mail is already registered", async ({
+  test("warns about an already used e-mail but still lets you continue", async ({
     page,
   }) => {
     await page.route("**/api/registration/check-email**", (route) =>
@@ -98,8 +98,25 @@ test.describe("Registration form validation", () => {
     await fillRegistrant(page, { room: "double" });
     await page.locator("#reg-email").blur();
 
-    await expect(page.getByText("Tento e-mail je už prihlásený.")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Ďalej/ })).toBeDisabled();
+    await expect(
+      page.getByText("Na tento e-mail už jedna prihláška existuje."),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Ďalej/ })).toBeEnabled();
+
+    await page.getByRole("button", { name: /Ďalej/ }).click();
+    await expect(page).toHaveURL("/summary");
+  });
+
+  test("the voucher billing address must be complete", async ({ page }) => {
+    await fillRegistrant(page, { room: "double" });
+    await page.getByLabel("Mám záujem uplatniť si rekreačný poukaz").check();
+
+    await page.getByRole("button", { name: /Ďalej/ }).click();
+
+    await expect(page.getByText("Adresa je povinná.")).toBeVisible();
+    await expect(page.getByText("Mesto je povinné.")).toBeVisible();
+    await expect(page.getByText("PSČ je povinné.")).toBeVisible();
+    await expect(page).toHaveURL("/registration");
   });
 
   test("does not advance while a required package is missing", async ({

@@ -4,7 +4,6 @@ import {
   ACCOMMODATION_NOTE,
   ACCOMMODATION_ORDER,
   ACCOMMODATION_PRICE,
-  qualifiesForVoucher,
   type Accommodation,
 } from "../utils/pricing";
 
@@ -14,7 +13,6 @@ export interface AttendeeData {
   accommodation: "" | Accommodation;
   phone: string;
   email: string;
-  recreationVoucher: boolean;
   roommatePreference: string;
 }
 
@@ -73,8 +71,6 @@ export default function AttendeeForm({
     onChange(index, e.target.name as keyof AttendeeData, e.target.value);
   }
 
-  const showVoucher =
-    data.accommodation !== "" && qualifiesForVoucher(data.accommodation);
   const showRoommate = data.accommodation === "double";
 
   return (
@@ -175,24 +171,6 @@ export default function AttendeeForm({
             onChange={handle}
             placeholder="Meno a priezvisko"
           />
-        </div>
-      )}
-
-      {showVoucher && (
-        <div className="form-field">
-          <label className="form-checkbox">
-            <input
-              type="checkbox"
-              name="recreationVoucher"
-              checked={data.recreationVoucher}
-              onChange={(e) =>
-                onChange(index, "recreationVoucher", e.target.checked)
-              }
-            />
-            <span>
-              Má záujem uplatniť si rekreačný poukaz u zamestnávateľa
-            </span>
-          </label>
         </div>
       )}
 

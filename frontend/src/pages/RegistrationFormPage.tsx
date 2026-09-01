@@ -15,12 +15,17 @@ import {
   type Accommodation,
   type PricePerson,
 } from "../utils/pricing";
+import VoucherSection, {
+  validateVoucherBilling,
+  type VoucherBillingErrors,
+} from "../components/VoucherSection";
 import {
   emptyAttendee,
   emptyRegistrant,
   useRegistration,
   type RegistrantData,
   type RegistrationType,
+  type VoucherBilling,
 } from "../context/RegistrationContext";
 import { EVENT_SUBTITLE } from "../eventInfo";
 
@@ -109,6 +114,10 @@ export default function RegistrationFormPage() {
     setNote,
     extraContribution,
     setExtraContribution,
+    recreationVoucher,
+    setRecreationVoucher,
+    voucherBilling,
+    setVoucherBilling,
   } = useRegistration();
 
   const [registrantErrors, setRegistrantErrors] = useState<RegistrantErrors>(
@@ -117,14 +126,20 @@ export default function RegistrationFormPage() {
   const [attendeeErrors, setAttendeeErrors] = useState<AttendeeErrors[]>(() =>
     attendees.map(() => ({})),
   );
+  const [voucherErrors, setVoucherErrors] = useState<VoucherBillingErrors>({});
   const [touched, setTouched] = useState(false);
   const [isEmailTaken, setIsEmailTaken] = useState(false);
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
   const navigate = useNavigate();
   const isMeAndOthers = regType === "me_and_others";
   const isOnlyMe = regType === "only_me";
   const isAttendee = isMeAndOthers || isOnlyMe;
+  // The voucher covers the registrant's own stay, so it needs a booked room.
+  const canClaimVoucher =
+    isAttendee &&
+    registrant.accommodation !== "" &&
+    qualifiesForVoucher(registrant.accommodation);
+  const claimsVoucher = canClaimVoucher && recreationVoucher;
 
   function handleRegTypeChange(e: ChangeEvent<HTMLInputElement>) {
     setRegType(e.target.value as RegistrationType);
@@ -132,8 +147,34 @@ export default function RegistrationFormPage() {
     setRegistrantErrors({});
     setAttendees([emptyAttendee()]);
     setAttendeeErrors([{}]);
+    setVoucherErrors({});
     setTouched(false);
     setIsEmailTaken(false);
+  }
+
+  function handleVoucherToggle(checked: boolean) {
+    setRecreationVoucher(checked);
+    if (!checked) {
+      setVoucherErrors({});
+      return;
+    }
+    // Pre-fill the invoice name from the contact details, still editable.
+    setVoucherBilling({
+      ...voucherBilling,
+      name: voucherBilling.name || registrant.name.trim(),
+      surname: voucherBilling.surname || registrant.surname.trim(),
+    });
+  }
+
+  function handleVoucherBillingChange(
+    field: keyof VoucherBilling,
+    value: string,
+  ) {
+    const updated = { ...voucherBilling, [field]: value };
+    setVoucherBilling(updated);
+    if (touched) {
+      setVoucherErrors(validateVoucherBilling(claimsVoucher, updated));
+    }
   }
 
   function handleRegistrantChange(
@@ -165,7 +206,6 @@ export default function RegistrationFormPage() {
   async function handleEmailBlur() {
     const email = registrant.email.trim();
     if (!email || !EMAIL_RE.test(email)) return;
-    setIsCheckingEmail(true);
     try {
       const res = await fetch(
         `${API_BASE}/api/registration/check-email?email=${encodeURIComponent(email)}`,
@@ -175,9 +215,7 @@ export default function RegistrationFormPage() {
         setIsEmailTaken(data.exists);
       }
     } catch {
-      // Network failure — let the backend catch it on submit
-    } finally {
-      setIsCheckingEmail(false);
+      // Network failure — a duplicate is only a warning, so nothing is blocked.
     }
   }
 
@@ -197,10 +235,17 @@ export default function RegistrationFormPage() {
 
     const rErr = validateRegistrant(registrant, isAttendee);
     const aErrs = attendees.map(validateAttendee);
+    const vErr = validateVoucherBilling(claimsVoucher, voucherBilling);
     setRegistrantErrors(rErr);
     setAttendeeErrors(aErrs);
+    setVoucherErrors(vErr);
 
-    if (hasErrors(rErr) || isEmailTaken || (!isOnlyMe && aErrs.some(hasErrors)))
+    // A duplicate e-mail only warns — the same address may register more groups.
+    if (
+      hasErrors(rErr) ||
+      hasErrors(vErr) ||
+      (!isOnlyMe && aErrs.some(hasErrors))
+    )
       return;
 
     const extra = parseInt(extraContribution, 10);
@@ -215,7 +260,6 @@ export default function RegistrationFormPage() {
         is_attendee: isAttendee,
         ...(isAttendee && {
           accommodation: registrant.accommodation as Accommodation,
-          recreation_voucher: registrant.recreationVoucher,
           ...(registrant.roommatePreference.trim() && {
             roommate_preference: registrant.roommatePreference.trim(),
           }),
@@ -227,7 +271,6 @@ export default function RegistrationFormPage() {
             name: a.name.trim(),
             surname: a.surname.trim(),
             accommodation: a.accommodation as Accommodation,
-            recreation_voucher: a.recreationVoucher,
             ...(a.roommatePreference.trim() && {
               roommate_preference: a.roommatePreference.trim(),
             }),
@@ -236,6 +279,16 @@ export default function RegistrationFormPage() {
           })),
       ...(note.trim() && { note: note.trim() }),
       extra_contribution: isNaN(extra) || extra < 0 ? 0 : extra,
+      recreation_voucher: claimsVoucher,
+      ...(claimsVoucher && {
+        voucher_billing: {
+          name: voucherBilling.name.trim(),
+          surname: voucherBilling.surname.trim(),
+          address: voucherBilling.address.trim(),
+          city: voucherBilling.city.trim(),
+          postal_code: voucherBilling.postalCode.trim(),
+        },
+      }),
     };
 
     navigate("/summary", { state: { regType, payload } });
@@ -256,11 +309,6 @@ export default function RegistrationFormPage() {
     pricePeople.length > 0 || parsedExtra > 0
       ? calculatePrice(pricePeople, isNaN(parsedExtra) ? 0 : parsedExtra)
       : null;
-
-  const showRegistrantVoucher =
-    isAttendee &&
-    registrant.accommodation !== "" &&
-    qualifiesForVoucher(registrant.accommodation);
 
   return (
     <main className="reg-form-page">
@@ -395,7 +443,7 @@ export default function RegistrationFormPage() {
                 <input
                   id="reg-email"
                   type="email"
-                  className={`form-input${registrantErrors.email || isEmailTaken ? " is-invalid" : ""}`}
+                  className={`form-input${registrantErrors.email ? " is-invalid" : ""}`}
                   value={registrant.email}
                   onChange={(e) =>
                     handleRegistrantChange("email", e.target.value)
@@ -408,9 +456,10 @@ export default function RegistrationFormPage() {
                   <p className="form-error">{registrantErrors.email}</p>
                 )}
                 {!registrantErrors.email && isEmailTaken && (
-                  <p className="form-error">
-                    Tento e-mail je už prihlásený. Pre úpravu prihlášky použite
-                    odkaz, ktorý ste dostali v potvrdzovacom e-maile.
+                  <p className="form-warning">
+                    Na tento e-mail už jedna prihláška existuje. Ak chcete
+                    upraviť tú pôvodnú, použite odkaz z potvrdzovacieho
+                    e-mailu — inak pokojne pokračujte a vytvorte novú.
                   </p>
                 )}
               </div>
@@ -477,28 +526,6 @@ export default function RegistrationFormPage() {
                   </div>
                 )}
 
-                {showRegistrantVoucher && (
-                  <div className="form-field">
-                    <label className="form-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={registrant.recreationVoucher}
-                        onChange={(e) =>
-                          handleRegistrantChange(
-                            "recreationVoucher",
-                            e.target.checked,
-                          )
-                        }
-                      />
-                      <span>
-                        Mám záujem uplatniť si rekreačný poukaz u zamestnávateľa
-                      </span>
-                    </label>
-                    <p className="form-hint">
-                      Pošleme vám informácie, ako pri uplatnení postupovať.
-                    </p>
-                  </div>
-                )}
               </>
             )}
           </section>
@@ -536,6 +563,17 @@ export default function RegistrationFormPage() {
                 + Pridať účastníka
               </button>
             </section>
+          )}
+
+          {/* ── Recreation voucher (registrant only) ─────── */}
+          {canClaimVoucher && (
+            <VoucherSection
+              claimed={recreationVoucher}
+              billing={voucherBilling}
+              errors={voucherErrors}
+              onToggle={handleVoucherToggle}
+              onBillingChange={handleVoucherBillingChange}
+            />
           )}
 
           {/* ── Voluntary contribution ──────────────────── */}
@@ -612,11 +650,7 @@ export default function RegistrationFormPage() {
           )}
 
           {/* ── Next ────────────────────────────────────── */}
-          <button
-            type="submit"
-            className="reg-form__submit"
-            disabled={isEmailTaken || isCheckingEmail}
-          >
+          <button type="submit" className="reg-form__submit">
             Ďalej →
           </button>
         </form>

@@ -11,7 +11,6 @@ export interface RegistrantData {
   email: string;
   /** Empty until the registrant picks a package; not used for "just_others". */
   accommodation: "" | Accommodation;
-  recreationVoucher: boolean;
   roommatePreference: string;
 }
 
@@ -22,9 +21,21 @@ export function emptyRegistrant(): RegistrantData {
     phone: "",
     email: "",
     accommodation: "",
-    recreationVoucher: false,
     roommatePreference: "",
   };
+}
+
+/** Billing address the hotel invoices when the registrant claims a recreation voucher. */
+export interface VoucherBilling {
+  name: string;
+  surname: string;
+  address: string;
+  city: string;
+  postalCode: string;
+}
+
+export function emptyVoucherBilling(): VoucherBilling {
+  return { name: "", surname: "", address: "", city: "", postalCode: "" };
 }
 
 export function emptyAttendee(): AttendeeData {
@@ -34,7 +45,6 @@ export function emptyAttendee(): AttendeeData {
     accommodation: "",
     phone: "",
     email: "",
-    recreationVoucher: false,
     roommatePreference: "",
   };
 }
@@ -51,6 +61,11 @@ interface RegistrationContextValue {
   /** Voluntary contribution on top of the package price, as typed by the user. */
   extraContribution: string;
   setExtraContribution: (v: string) => void;
+  /** The recreation voucher belongs to the registrant, so it lives at the top level. */
+  recreationVoucher: boolean;
+  setRecreationVoucher: (v: boolean) => void;
+  voucherBilling: VoucherBilling;
+  setVoucherBilling: (b: VoucherBilling) => void;
   resetForm: () => void;
 }
 
@@ -64,6 +79,10 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
   const [attendees, setAttendees] = useState<AttendeeData[]>([emptyAttendee()]);
   const [note, setNote] = useState("");
   const [extraContribution, setExtraContribution] = useState("");
+  const [recreationVoucher, setRecreationVoucher] = useState(false);
+  const [voucherBilling, setVoucherBilling] = useState<VoucherBilling>(
+    emptyVoucherBilling,
+  );
 
   function resetForm() {
     setRegType("only_me");
@@ -71,6 +90,8 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
     setAttendees([emptyAttendee()]);
     setNote("");
     setExtraContribution("");
+    setRecreationVoucher(false);
+    setVoucherBilling(emptyVoucherBilling());
   }
 
   return (
@@ -86,6 +107,10 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
         setNote,
         extraContribution,
         setExtraContribution,
+        recreationVoucher,
+        setRecreationVoucher,
+        voucherBilling,
+        setVoucherBilling,
         resetForm,
       }}
     >

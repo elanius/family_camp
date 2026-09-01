@@ -13,32 +13,49 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["full-registration"])
 
+# Statuses in which the public update link no longer works. Payment info carries a
+# fixed amount, so the registration must not change once that e-mail went out.
+LOCKED_STATUSES = ("wait_for_payment", "paid", "accepted")
+
+# Matches an active (non-cancelled) registration, for both legacy docs that only
+# have `cancelled` and current docs that have `status`.
+ACTIVE_QUERY = {
+    "$or": [
+        {"status": {"$nin": ["rejected"]}},
+        {"status": {"$exists": False}, "cancelled": {"$ne": True}},
+    ]
+}
+
+
+def _attendee_full_names(payload: RegistrationRequest) -> list[str]:
+    """Everyone who will attend, registrant first when they take part."""
+    names: list[str] = []
+    if payload.registrant.is_attendee:
+        names.append(f"{payload.registrant.name} {payload.registrant.surname}".strip())
+    names.extend(f"{a.name} {a.surname}".strip() for a in payload.attendees)
+    return names
+
+
+def _lock_flags(doc: dict) -> tuple[bool, bool, bool]:
+    """Return (is_paid, is_locked, is_cancelled) for a registration document."""
+    doc_status = doc.get("status")
+    if doc_status is not None:
+        return (
+            doc_status in ("paid", "accepted"),
+            doc_status in LOCKED_STATUSES,
+            doc_status == "rejected",
+        )
+    legacy_paid = doc.get("is_paid", False)
+    return legacy_paid, legacy_paid, doc.get("cancelled", False)
+
 
 @router.post("/registration", status_code=status.HTTP_201_CREATED)
 async def register(payload: RegistrationRequest) -> dict:
     db = get_db()
     collection = db["registration"]
 
-    # Duplicate email check — reject if an active (non-rejected) record exists.
-    # Handles both legacy docs (cancelled field) and new docs (status field).
-    existing = await collection.find_one(
-        {
-            "registrant.email": str(payload.registrant.email),
-            "$or": [
-                {"status": {"$nin": ["rejected"]}},
-                {"status": {"$exists": False}, "cancelled": {"$ne": True}},
-            ],
-        }
-    )
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Tento e-mail je už zaregistrovaný. Pre úpravu registrácie použite odkaz, "
-                "ktorý ste dostali v potvrdzovacom e-maile."
-            ),
-        )
-
+    # A repeated e-mail is allowed on purpose — one person may register several
+    # separate groups. The form only warns about it.
     token = secrets.token_urlsafe(32)
     record = RegistrationRecord(
         registration_type=payload.registration_type,
@@ -46,6 +63,8 @@ async def register(payload: RegistrationRequest) -> dict:
         attendees=payload.attendees,
         note=payload.note or None,
         extra_contribution=payload.extra_contribution,
+        recreation_voucher=payload.recreation_voucher,
+        voucher_billing=payload.voucher_billing,
         update_token=token,
     )
 
@@ -74,7 +93,7 @@ async def register(payload: RegistrationRequest) -> dict:
         await send_full_registration_confirmation(
             to_email=str(payload.registrant.email),
             registrant_name=payload.registrant.name,
-            attendee_count=len(payload.attendees),
+            attendee_names=_attendee_full_names(payload),
             update_link=update_link,
         )
     except Exception:
@@ -104,17 +123,14 @@ async def register(payload: RegistrationRequest) -> dict:
 # NOTE: This route MUST be defined before /{token} to avoid path conflict.
 @router.get("/registration/check-email", status_code=status.HTTP_200_OK)
 async def check_email(email: EmailStr = Query(...)) -> dict:
-    """Returns {"exists": true} if this email belongs to an active (non-cancelled) registration."""
+    """Returns {"exists": true} if this email belongs to an active (non-cancelled) registration.
+
+    Informational only — a duplicate e-mail does not block a new registration.
+    """
     db = get_db()
     collection = db["registration"]
     doc = await collection.find_one(
-        {
-            "registrant.email": str(email),
-            "$or": [
-                {"status": {"$nin": ["rejected"]}},
-                {"status": {"$exists": False}, "cancelled": {"$ne": True}},
-            ],
-        },
+        {"registrant.email": str(email), **ACTIVE_QUERY},
         projection={"_id": 1},
     )
     return {"exists": doc is not None}
@@ -130,21 +146,18 @@ async def get_registration(token: str) -> RegistrationTokenResponse:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Registrácia nebola nájdená.",
         )
-    doc_status = doc.get("status")
-    if doc_status is not None:
-        is_paid = doc_status in ("paid", "accepted")
-        cancelled = doc_status == "rejected"
-    else:
-        is_paid = doc.get("is_paid", False)
-        cancelled = doc.get("cancelled", False)
+    is_paid, is_locked, cancelled = _lock_flags(doc)
     return RegistrationTokenResponse(
         registration_type=doc["registration_type"],
         registrant=doc["registrant"],
         attendees=doc["attendees"],
         note=doc.get("note"),
         extra_contribution=doc.get("extra_contribution", 0),
+        recreation_voucher=doc.get("recreation_voucher", False),
+        voucher_billing=doc.get("voucher_billing"),
         is_paid=is_paid,
         cancelled=cancelled,
+        locked=is_locked,
     )
 
 
@@ -159,13 +172,7 @@ async def update_registration(token: str, payload: RegistrationRequest) -> dict:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Registrácia nebola nájdená.",
         )
-    doc_status = doc.get("status")
-    if doc_status is not None:
-        is_locked = doc_status in ("paid", "accepted")
-        is_cancelled = doc_status == "rejected"
-    else:
-        is_locked = doc.get("is_paid", False)
-        is_cancelled = doc.get("cancelled", False)
+    _, is_locked, is_cancelled = _lock_flags(doc)
     if is_locked:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -177,40 +184,20 @@ async def update_registration(token: str, payload: RegistrationRequest) -> dict:
             detail="Táto registrácia bola zrušená.",
         )
 
-    # If the email is changing, ensure the new one is not already taken.
-    new_email = str(payload.registrant.email)
-    old_email = doc["registrant"]["email"]
-    if new_email != old_email:
-        conflict = await collection.find_one(
-            {
-                "registrant.email": new_email,
-                "update_token": {"$ne": token},
-                "$or": [
-                    {"status": {"$nin": ["rejected"]}},
-                    {"status": {"$exists": False}, "cancelled": {"$ne": True}},
-                ],
-            },
-            projection={"_id": 1},
-        )
-        if conflict:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Tento e-mail je už zaregistrovaný. Pre úpravu registrácie použite odkaz, "
-                    "ktorý ste dostali v potvrdzovacom e-maile."
-                ),
-            )
-
     update_fields = {
         "registration_type": payload.registration_type,
         "registrant": payload.registrant.model_dump(),
         "attendees": [a.model_dump() for a in payload.attendees],
         "note": payload.note or None,
         "extra_contribution": payload.extra_contribution,
+        "recreation_voucher": payload.recreation_voucher,
+        "voucher_billing": (
+            payload.voucher_billing.model_dump() if payload.voucher_billing else None
+        ),
     }
     await collection.update_one({"update_token": token}, {"$set": update_fields})
 
-    logger.info("Registration updated via token for %s.", new_email)
+    logger.info("Registration updated via token for %s.", payload.registrant.email)
     return {"message": "Registrácia bola aktualizovaná."}
 
 
@@ -225,11 +212,7 @@ async def cancel_registration(token: str) -> dict:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Registrácia nebola nájdená.",
         )
-    doc_status = doc.get("status")
-    if doc_status is not None:
-        is_locked = doc_status in ("paid", "accepted")
-    else:
-        is_locked = doc.get("is_paid", False)
+    _, is_locked, _ = _lock_flags(doc)
     if is_locked:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

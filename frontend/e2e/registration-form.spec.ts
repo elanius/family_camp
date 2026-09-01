@@ -73,6 +73,38 @@ test.describe("Registration form – accommodation", () => {
     await registrantRoom(page, "none").check();
     await expect(voucher).not.toBeVisible();
   });
+
+  test("the voucher is offered only when the registrant attends", async ({
+    page,
+  }) => {
+    const voucher = page.getByText(
+      "Mám záujem uplatniť si rekreačný poukaz u zamestnávateľa",
+    );
+    await registrantRoom(page, "double").check();
+    await expect(voucher).toBeVisible();
+
+    // "Len ďalší" — the payer does not come, so there is nothing to claim.
+    await page.getByRole("radio", { name: /Len ďalší/ }).check();
+    await expect(voucher).not.toBeVisible();
+  });
+
+  test("ticking the voucher reveals the billing address for the hotel", async ({
+    page,
+  }) => {
+    await fillRegistrant(page, { room: "double" });
+    await expect(page.locator("#voucher-address")).not.toBeVisible();
+
+    await page
+      .getByLabel("Mám záujem uplatniť si rekreačný poukaz")
+      .check();
+
+    // Name and surname come from the contact details.
+    await expect(page.locator("#voucher-name")).toHaveValue("Ján");
+    await expect(page.locator("#voucher-surname")).toHaveValue("Novák");
+    await expect(page.locator("#voucher-address")).toBeVisible();
+    await expect(page.locator("#voucher-city")).toBeVisible();
+    await expect(page.locator("#voucher-postal-code")).toBeVisible();
+  });
 });
 
 test.describe("Registration form – price preview", () => {

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { fillAttendee, fillRegistrant } from "./helpers";
+import { claimVoucher, fillAttendee, fillRegistrant } from "./helpers";
 
 interface SubmittedPayload {
   registration_type: string;
@@ -9,17 +9,23 @@ interface SubmittedPayload {
     email: string;
     is_attendee: boolean;
     accommodation?: string;
-    recreation_voucher?: boolean;
     roommate_preference?: string;
   };
   attendees: {
     name: string;
     accommodation: string;
-    recreation_voucher?: boolean;
     email?: string;
   }[];
   note?: string;
   extra_contribution: number;
+  recreation_voucher: boolean;
+  voucher_billing?: {
+    name: string;
+    surname: string;
+    address: string;
+    city: string;
+    postal_code: string;
+  };
 }
 
 /** Capture the POST body and answer with the given status. */
@@ -49,10 +55,8 @@ test.describe("Summary and submit", () => {
     await page.getByRole("radio", { name: /Ja a ďalší/ }).check();
     await fillRegistrant(page, { room: "double" });
     await page.locator("#reg-roommate").fill("Eva Nováková");
-    await page
-      .getByText("Mám záujem uplatniť si rekreačný poukaz u zamestnávateľa")
-      .click();
     await fillAttendee(page, 0, { room: "double" });
+    await claimVoucher(page);
     await page.locator("#reg-note").fill("Prídeme v piatok o 15:30.");
 
     await page.getByRole("button", { name: /Ďalej/ }).click();
@@ -61,11 +65,16 @@ test.describe("Summary and submit", () => {
     await expect(
       page.getByRole("heading", { name: "Zhrnutie prihlášky" }),
     ).toBeVisible();
-    await expect(page.getByText("Ján Novák", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Ján Novák", { exact: true }).first(),
+    ).toBeVisible();
     await expect(
       page.getByText("Eva Nováková", { exact: true }).first(),
     ).toBeVisible();
     await expect(page.getByText("Áno, mám záujem")).toBeVisible();
+    await expect(
+      page.getByText("Hlavná 12, 811 01 Bratislava"),
+    ).toBeVisible();
     await expect(page.getByText("Prídeme v piatok o 15:30.")).toBeVisible();
     // 179 + 179
     await expect(page.locator(".price-preview__total")).toContainText("358");
@@ -91,6 +100,7 @@ test.describe("Summary and submit", () => {
     expect(body.attendees).toHaveLength(1);
     expect(body.attendees[0].accommodation).toBe("none");
     expect(body.extra_contribution).toBe(40);
+    expect(body.recreation_voucher).toBe(false);
   });
 
   test("submits a 'Len ja' payload with no attendees", async ({ page }) => {
@@ -130,18 +140,53 @@ test.describe("Summary and submit", () => {
     expect(body.attendees[0].accommodation).toBe("single");
   });
 
-  test("reports a duplicate e-mail rejected by the backend", async ({
+  test("accepts a registration on an e-mail that is already in use", async ({
     page,
   }) => {
-    await stubRegistration(page, 409);
+    await page.route("**/api/registration/check-email**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ exists: true }),
+      }),
+    );
+    const captured = await stubRegistration(page);
 
     await fillRegistrant(page, { room: "double" });
+    await page.locator("#reg-email").blur();
+    await expect(
+      page.getByText("Na tento e-mail už jedna prihláška existuje."),
+    ).toBeVisible();
+
     await page.getByRole("button", { name: /Ďalej/ }).click();
     await page.getByRole("button", { name: "Odoslať prihlášku" }).click();
 
-    await expect(
-      page.getByText("Tento e-mail je už prihlásený."),
-    ).toBeVisible();
+    await expect(page.getByText("Prihláška bola odoslaná")).toBeVisible();
+    expect(captured.body!.registrant.email).toBe("jan@example.sk");
+  });
+
+  test("submits the voucher as a top-level claim with billing data", async ({
+    page,
+  }) => {
+    const captured = await stubRegistration(page);
+
+    await fillRegistrant(page, { room: "double" });
+    await claimVoucher(page);
+
+    await page.getByRole("button", { name: /Ďalej/ }).click();
+    await page.getByRole("button", { name: "Odoslať prihlášku" }).click();
+
+    await expect(page.getByText("Prihláška bola odoslaná")).toBeVisible();
+
+    const body = captured.body!;
+    expect(body.recreation_voucher).toBe(true);
+    expect(body.voucher_billing).toEqual({
+      name: "Ján",
+      surname: "Novák",
+      address: "Hlavná 12",
+      city: "Bratislava",
+      postal_code: "811 01",
+    });
   });
 
   test("reports a server failure and keeps the data for a retry", async ({

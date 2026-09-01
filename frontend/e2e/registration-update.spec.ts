@@ -11,7 +11,6 @@ const REGISTRATION = {
     email: "jan@example.sk",
     is_attendee: true,
     accommodation: "double",
-    recreation_voucher: true,
     roommate_preference: "Eva Nováková",
   },
   attendees: [
@@ -21,14 +20,22 @@ const REGISTRATION = {
       accommodation: "double",
       phone: null,
       email: "eva@example.sk",
-      recreation_voucher: false,
       roommate_preference: "Ján Novák",
     },
   ],
   note: "Prídeme v piatok.",
   extra_contribution: 20,
+  recreation_voucher: true,
+  voucher_billing: {
+    name: "Ján",
+    surname: "Novák",
+    address: "Hlavná 12",
+    city: "Bratislava",
+    postal_code: "811 01",
+  },
   is_paid: false,
   cancelled: false,
+  locked: false,
 };
 
 /** Serve GET /api/registration/:token with the given overrides. */
@@ -60,6 +67,12 @@ test.describe("Update page – loading", () => {
     await expect(page.locator("#reg-extra")).toHaveValue("20");
     await expect(page.locator("#name-0")).toHaveValue("Eva");
     await expect(page.locator("#reg-note")).toHaveValue("Prídeme v piatok.");
+    await expect(
+      page.getByLabel("Mám záujem uplatniť si rekreačný poukaz"),
+    ).toBeChecked();
+    await expect(page.locator("#voucher-address")).toHaveValue("Hlavná 12");
+    await expect(page.locator("#voucher-city")).toHaveValue("Bratislava");
+    await expect(page.locator("#voucher-postal-code")).toHaveValue("811 01");
     // 179 + 179 + 20
     await expect(page.locator(".price-preview__total")).toContainText("378");
   });
@@ -82,6 +95,14 @@ test.describe("Update page – loading", () => {
     ).toBeVisible();
   });
 
+  test("locks a registration once payment info was sent", async ({ page }) => {
+    await stubLoad(page, { locked: true });
+    await page.goto(`/update/${TOKEN}`);
+    await expect(
+      page.getByRole("heading", { name: "Prihlášku už nie je možné meniť" }),
+    ).toBeVisible();
+  });
+
   test("shows a cancelled registration as cancelled", async ({ page }) => {
     await stubLoad(page, { cancelled: true });
     await page.goto(`/update/${TOKEN}`);
@@ -99,9 +120,10 @@ test.describe("Update page – loading", () => {
         ...REGISTRATION.registrant,
         is_attendee: false,
         accommodation: null,
-        recreation_voucher: false,
         roommate_preference: null,
       },
+      recreation_voucher: false,
+      voucher_billing: null,
     });
     await page.goto(`/update/${TOKEN}`);
 
@@ -132,9 +154,17 @@ test.describe("Update page – saving", () => {
     const payload = body as unknown as {
       registrant: { accommodation: string };
       extra_contribution: number;
+      recreation_voucher: boolean;
+      voucher_billing: { address: string; city: string; postal_code: string };
     };
     expect(payload.registrant.accommodation).toBe("single");
     expect(payload.extra_contribution).toBe(60);
+    expect(payload.recreation_voucher).toBe(true);
+    expect(payload.voucher_billing).toMatchObject({
+      address: "Hlavná 12",
+      city: "Bratislava",
+      postal_code: "811 01",
+    });
   });
 
   test("reports a save failure", async ({ page }) => {

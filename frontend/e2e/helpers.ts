@@ -58,3 +58,18 @@ export async function fillAttendee(
   await page.locator(`#surname-${index}`).fill(surname);
   await attendeeRoom(page, index, room).check();
 }
+
+/** Tick the recreation voucher and fill the billing address it reveals. */
+export async function claimVoucher(
+  page: Page,
+  {
+    address = "Hlavná 12",
+    city = "Bratislava",
+    postalCode = "811 01",
+  }: { address?: string; city?: string; postalCode?: string } = {},
+) {
+  await page.getByLabel("Mám záujem uplatniť si rekreačný poukaz").check();
+  await page.locator("#voucher-address").fill(address);
+  await page.locator("#voucher-city").fill(city);
+  await page.locator("#voucher-postal-code").fill(postalCode);
+}

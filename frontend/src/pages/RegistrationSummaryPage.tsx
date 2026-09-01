@@ -18,7 +18,6 @@ interface RegistrantPayload {
   email: string;
   is_attendee: boolean;
   accommodation?: Accommodation;
-  recreation_voucher?: boolean;
   roommate_preference?: string;
 }
 
@@ -28,8 +27,15 @@ interface AttendeePayload {
   accommodation: Accommodation;
   phone?: string;
   email?: string;
-  recreation_voucher?: boolean;
   roommate_preference?: string;
+}
+
+interface VoucherBillingPayload {
+  name: string;
+  surname: string;
+  address: string;
+  city: string;
+  postal_code: string;
 }
 
 interface RegistrationPayload {
@@ -38,6 +44,8 @@ interface RegistrationPayload {
   attendees: AttendeePayload[];
   note?: string;
   extra_contribution: number;
+  recreation_voucher: boolean;
+  voucher_billing?: VoucherBillingPayload;
 }
 
 interface LocationState {
@@ -45,7 +53,7 @@ interface LocationState {
   payload: RegistrationPayload;
 }
 
-type Status = "idle" | "loading" | "error" | "duplicate" | "success";
+type Status = "idle" | "loading" | "error" | "success";
 
 export default function RegistrationSummaryPage() {
   const location = useLocation();
@@ -96,8 +104,6 @@ export default function RegistrationSummaryPage() {
 
       if (res.status === 201) {
         setStatus("success");
-      } else if (res.status === 409) {
-        setStatus("duplicate");
       } else {
         setStatus("error");
       }
@@ -116,8 +122,8 @@ export default function RegistrationSummaryPage() {
             </h1>
             <p className="reg-form-page__success-text">
               Potvrdenie sme zaslali na váš e-mail spolu s odkazom, cez ktorý
-              môžete prihlášku kedykoľvek upraviť. Informácie k úhrade vám
-              pošleme v samostatnom e-maile. Tešíme sa na vás!
+              môžete prihlášku upraviť — až kým vám nepošleme informácie
+              k úhrade. Tešíme sa na vás!
             </p>
             <button
               className="reg-form__submit"
@@ -176,12 +182,6 @@ export default function RegistrationSummaryPage() {
                 </span>
               </div>
             )}
-            {registrant.recreation_voucher && (
-              <div className="summary-card__row">
-                <span className="summary-card__label">Rekreačný poukaz</span>
-                <span className="summary-card__value">Áno, mám záujem</span>
-              </div>
-            )}
           </div>
         </section>
 
@@ -216,12 +216,6 @@ export default function RegistrationSummaryPage() {
                     </span>
                   </div>
                 )}
-                {a.recreation_voucher && (
-                  <div className="summary-card__row">
-                    <span className="summary-card__label">Rekreačný poukaz</span>
-                    <span className="summary-card__value">Áno, má záujem</span>
-                  </div>
-                )}
                 {a.phone && (
                   <div className="summary-card__row">
                     <span className="summary-card__label">Telefón</span>
@@ -236,6 +230,34 @@ export default function RegistrationSummaryPage() {
                 )}
               </div>
             ))}
+          </section>
+        )}
+
+        {/* ── Recreation voucher ──────────────────────── */}
+        {payload.recreation_voucher && payload.voucher_billing && (
+          <section className="summary-section">
+            <h2 className="summary-section__title">Rekreačný poukaz</h2>
+            <div className="summary-card">
+              <div className="summary-card__row">
+                <span className="summary-card__label">Záujem o poukaz</span>
+                <span className="summary-card__value">Áno, mám záujem</span>
+              </div>
+              <div className="summary-card__row">
+                <span className="summary-card__label">Fakturačné meno</span>
+                <span className="summary-card__value">
+                  {payload.voucher_billing.name}{" "}
+                  {payload.voucher_billing.surname}
+                </span>
+              </div>
+              <div className="summary-card__row">
+                <span className="summary-card__label">Adresa</span>
+                <span className="summary-card__value">
+                  {payload.voucher_billing.address},{" "}
+                  {payload.voucher_billing.postal_code}{" "}
+                  {payload.voucher_billing.city}
+                </span>
+              </div>
+            </div>
           </section>
         )}
 
@@ -293,13 +315,6 @@ export default function RegistrationSummaryPage() {
             Odoslanie prihlášky zlyhalo. Skúste to prosím znova.
           </p>
         )}
-        {status === "duplicate" && (
-          <p className="reg-form__submit-error">
-            Tento e-mail je už prihlásený. Pre úpravu prihlášky použite odkaz,
-            ktorý ste dostali v potvrdzovacom e-maile.
-          </p>
-        )}
-
         <div className="reg-summary__actions">
           <button
             type="button"

@@ -8,6 +8,8 @@ potvrdzovací e-mail s odkazom na neskoršiu úpravu alebo zrušenie prihlášky
 Administrátor v samostatnej sekcii spravuje stav prihlášok a posiela platobné
 inštrukcie s QR kódom (Pay by Square).
 
+Rovnaký e-mail smie podať viac prihlášok — formulár na duplicitu len upozorní.
+
 ## Stack
 
 | Layer    | Tech                                      |
@@ -60,10 +62,16 @@ Každý **účastník** si vyberá balík ubytovania a stravy:
 | `single`        | 219 €        | to isté v jednolôžkovej izbe                      |
 | `none`          | 0 €          | účasť len na prednáškach                          |
 
-Ďalej sa pri každom účastníkovi eviduje záujem o **rekreačný poukaz**
-(len pri pobyte, t. j. `double`/`single`) a **preferovaný spolubývajúci**
-(len pri `double`). K celej prihláške patrí voliteľný **dobrovoľný príspevok**
-v celých eurách, ktorý sa pripočíta k výslednej sume.
+Pri každom účastníkovi sa eviduje **preferovaný spolubývajúci** (len pri
+`double`). K celej prihláške patrí voliteľný **dobrovoľný príspevok** v celých
+eurách, ktorý sa pripočíta k výslednej sume.
+
+**Rekreačný poukaz** patrí osobe, ktorá prihlášku podáva, preto je to voľba na
+úrovni celej prihlášky (`recreation_voucher`), nie jednotlivých účastníkov.
+Ponúka sa len pri `only_me` a `me_and_others`, a len keď má prihlasujúci
+objednaný pobyt. Po zaškrtnutí sa vypĺňajú fakturačné údaje pre hotel
+(`voucher_billing`: meno, priezvisko, adresa, mesto, PSČ) — hotel na ne vystaví
+faktúru potrebnú na uplatnenie poukazu.
 
 Ceny sú definované na dvoch miestach a musia zostať zosúladené:
 [`frontend/src/utils/pricing.ts`](frontend/src/utils/pricing.ts) a
@@ -142,5 +150,13 @@ registrácia však prebehne normálne.
 | `/admin/payment/:id`   | Platobné údaje, QR kód a odoslanie e-mailu s platbou    |
 
 Stavy prihlášky: `new → wait_for_payment → paid → accepted`, kedykoľvek
-`rejected`. Prihlášku už nie je možné meniť cez verejný odkaz, keď je
-`paid` alebo `accepted`.
+`rejected`. Verejný odkaz na úpravu funguje len v stave `new` — odoslaním
+platobných informácií (`wait_for_payment`) sa prihláška uzavrie, aby sa
+nerozišla s už oznámenou sumou.
+
+Platba má pre celé podujatie **pevný variabilný symbol `022026`**
+(`FIXED_VARIABLE_SYMBOL` v [`backend/app/routers/admin.py`](backend/app/routers/admin.py));
+platby sa párujú cez **správu pre príjemcu**, ktorá obsahuje celé meno
+prihlasujúceho. Sumu môže administrátor pred odoslaním upraviť — uloží sa do
+`payment_amount` a od tej chvíle je to cena prihlášky, aj keď sa líši od
+vypočítanej.

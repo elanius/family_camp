@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import "../admin.css";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import RegistrationList, {
+  effectiveAmount,
   toPeople,
   type RegistrationItem,
   type RegistrationStatus,
@@ -76,8 +77,13 @@ export default function AdminPage() {
       if (item.status === "rejected") continue;
       const attending = toPeople(item);
       people += attending.length;
-      vouchers += attending.filter((p) => p.voucher).length;
-      amount += calculatePrice(attending, item.extra_contribution ?? 0).total;
+      if (item.recreation_voucher) vouchers += 1;
+      // Count what was actually invoiced when it differs from the calculation.
+      const calculated = calculatePrice(
+        attending,
+        item.extra_contribution ?? 0,
+      ).total;
+      amount += effectiveAmount(item, calculated);
     }
     return { totalPeople: people, totalAmount: amount, totalVouchers: vouchers };
   }, [items]);

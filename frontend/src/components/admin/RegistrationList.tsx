@@ -23,7 +23,6 @@ export interface AttendeeData {
   accommodation: Accommodation;
   phone?: string;
   email?: string;
-  recreation_voucher?: boolean;
   roommate_preference?: string;
 }
 
@@ -34,8 +33,15 @@ export interface RegistrantData {
   email: string;
   is_attendee: boolean;
   accommodation?: Accommodation | null;
-  recreation_voucher?: boolean;
   roommate_preference?: string;
+}
+
+export interface VoucherBilling {
+  name: string;
+  surname: string;
+  address: string;
+  city: string;
+  postal_code: string;
 }
 
 export interface RegistrationItem {
@@ -45,9 +51,21 @@ export interface RegistrationItem {
   attendees: AttendeeData[];
   note?: string;
   extra_contribution?: number;
+  recreation_voucher?: boolean;
+  voucher_billing?: VoucherBilling | null;
   status: RegistrationStatus;
   registered_at: string;
   update_token: string;
+  /** Amount actually sent in the payment e-mail; overrides the calculated price. */
+  payment_amount?: number | null;
+}
+
+/** The price the registrant was actually asked to pay, falling back to the calculation. */
+export function effectiveAmount(
+  item: RegistrationItem,
+  calculatedTotal: number,
+): number {
+  return item.payment_amount ?? calculatedTotal;
 }
 
 /** People counted for the headcount and the price, in display order. */
@@ -65,7 +83,8 @@ export function toPeople(item: RegistrationItem) {
       name: reg.name,
       surname: reg.surname,
       accommodation: reg.accommodation,
-      voucher: reg.recreation_voucher ?? false,
+      // The voucher is claimed once, by the person who registered.
+      voucher: item.recreation_voucher ?? false,
       roommate: reg.roommate_preference ?? "",
     });
   }
@@ -74,7 +93,7 @@ export function toPeople(item: RegistrationItem) {
       name: a.name,
       surname: a.surname,
       accommodation: a.accommodation,
-      voucher: a.recreation_voucher ?? false,
+      voucher: false,
       roommate: a.roommate_preference ?? "",
     });
   }
@@ -154,6 +173,9 @@ function RegistrationRow({
   const voucherCount = people.filter((p) => p.voucher).length;
 
   const pricing = calculatePrice(people, item.extra_contribution ?? 0);
+  const amount = effectiveAmount(item, pricing.total);
+  // The admin may have edited the amount before sending the payment e-mail.
+  const amountOverridden = amount !== pricing.total;
 
   async function handleAction(action: Action) {
     if (action === "send_payment_info") {
@@ -228,9 +250,17 @@ function RegistrationRow({
               <span className="font-medium text-gray-700">
                 {totalPeople} {totalPeople === 1 ? "person" : "people"}
               </span>
-              <span className="font-semibold text-green-800">
-                €{pricing.total}
+              <span
+                className="font-semibold text-green-800"
+                title={amountOverridden ? "Amount sent in the payment e-mail" : undefined}
+              >
+                €{amount}
               </span>
+              {amountOverridden && (
+                <span className="text-gray-400 line-through" title="Calculated price">
+                  €{pricing.total}
+                </span>
+              )}
               {voucherCount > 0 && (
                 <span className="text-amber-700" title="Recreation voucher requested">
                   🎟 {voucherCount}
@@ -340,14 +370,45 @@ function RegistrationRow({
                   colSpan={5}
                   className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
                 >
-                  Total
+                  {amountOverridden ? "Calculated" : "Total"}
                 </td>
-                <td className="px-4 py-2.5 text-right font-bold text-green-800">
+                <td
+                  className={`px-4 py-2.5 text-right font-bold ${
+                    amountOverridden ? "text-gray-400" : "text-green-800"
+                  }`}
+                >
                   €{pricing.total}
                 </td>
               </tr>
+              {amountOverridden && (
+                <tr className="bg-gray-50">
+                  <td
+                    colSpan={5}
+                    className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
+                  >
+                    Sent in payment info
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-bold text-green-800">
+                    €{amount}
+                  </td>
+                </tr>
+              )}
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {/* ── Recreation voucher billing ── */}
+      {item.recreation_voucher && item.voucher_billing && (
+        <div className="border-t border-gray-100 px-4 py-3 bg-amber-50">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+            🎟 Recreation voucher — invoice to
+          </p>
+          <p className="text-sm text-gray-700">
+            {item.voucher_billing.name} {item.voucher_billing.surname},{" "}
+            {item.voucher_billing.address}, {item.voucher_billing.postal_code}{" "}
+            {item.voucher_billing.city}
+          </p>
         </div>
       )}
 

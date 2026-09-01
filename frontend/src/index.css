@@ -556,6 +556,17 @@ textarea.form-input {
   margin-top: 0.35rem;
 }
 
+/* Non-blocking notice — e.g. this e-mail already has a registration. */
+.form-warning {
+  font-size: 0.82rem;
+  color: #8a6320;
+  background: #fdf6e7;
+  border: 1px solid #ecd9ac;
+  border-radius: var(--radius);
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.35rem;
+}
+
 /* ── Radio & checkbox ─────────────────────────────────────────────────── */
 .form-radio-group {
   display: flex;
@@ -804,6 +815,7 @@ textarea.form-input {
 }
 
 .reg-form__submit-error,
+.reg-form__submit-warning,
 .reg-form__submit-success {
   border-radius: var(--radius);
   padding: 0.8rem 1rem;
@@ -821,6 +833,12 @@ textarea.form-input {
   background: #eef4ef;
   border: 1px solid #c6dbcc;
   color: var(--color-success);
+}
+
+.reg-form__submit-warning {
+  background: #fdf6e7;
+  border: 1px solid #ecd9ac;
+  color: #8a6320;
 }
 
 /* ── Price preview ────────────────────────────────────────────────────── */

@@ -14,11 +14,17 @@ import {
   qualifiesForVoucher,
   type Accommodation,
 } from "../utils/pricing";
+import VoucherSection, {
+  validateVoucherBilling,
+  type VoucherBillingErrors,
+} from "../components/VoucherSection";
 import {
   emptyAttendee,
   emptyRegistrant,
+  emptyVoucherBilling,
   type RegistrantData,
   type RegistrationType,
+  type VoucherBilling,
 } from "../context/RegistrationContext";
 import { validateRegistrant, toPricePeople } from "./RegistrationFormPage";
 import { EVENT_SUBTITLE } from "../eventInfo";
@@ -36,7 +42,6 @@ interface LoadedRegistration {
     email: string;
     is_attendee: boolean;
     accommodation?: Accommodation | null;
-    recreation_voucher?: boolean;
     roommate_preference?: string | null;
   };
   attendees: Array<{
@@ -45,27 +50,36 @@ interface LoadedRegistration {
     accommodation: Accommodation;
     phone?: string | null;
     email?: string | null;
-    recreation_voucher?: boolean;
     roommate_preference?: string | null;
   }>;
   note?: string | null;
   extra_contribution?: number;
+  recreation_voucher?: boolean;
+  voucher_billing?: {
+    name: string;
+    surname: string;
+    address: string;
+    city: string;
+    postal_code: string;
+  } | null;
   is_paid: boolean;
   cancelled: boolean;
+  /** True once payment info was sent — the form is read-only from then on. */
+  locked?: boolean;
 }
 
 function hasErrors(errors: object): boolean {
   return Object.values(errors).some(Boolean);
 }
 
-type LoadState = "loading" | "not-found" | "paid" | "cancelled" | "ready";
-type SaveState =
-  | "idle"
-  | "saving"
-  | "saved"
-  | "error"
-  | "locked"
-  | "email-conflict";
+type LoadState =
+  | "loading"
+  | "not-found"
+  | "payment-sent"
+  | "paid"
+  | "cancelled"
+  | "ready";
+type SaveState = "idle" | "saving" | "saved" | "error" | "locked";
 type CancelState = "idle" | "confirming" | "cancelling" | "done" | "locked";
 
 export default function RegistrationUpdatePage() {
@@ -83,16 +97,25 @@ export default function RegistrationUpdatePage() {
   const [attendees, setAttendees] = useState<AttendeeData[]>([emptyAttendee()]);
   const [note, setNote] = useState("");
   const [extraContribution, setExtraContribution] = useState("");
+  const [recreationVoucher, setRecreationVoucher] = useState(false);
+  const [voucherBilling, setVoucherBilling] =
+    useState<VoucherBilling>(emptyVoucherBilling);
   const [registrantErrors, setRegistrantErrors] = useState<
     ReturnType<typeof validateRegistrant>
   >({});
   const [attendeeErrors, setAttendeeErrors] = useState<AttendeeErrors[]>([{}]);
+  const [voucherErrors, setVoucherErrors] = useState<VoucherBillingErrors>({});
   const [isEmailTaken, setIsEmailTaken] = useState(false);
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [touched, setTouched] = useState(false);
   const [originalEmail, setOriginalEmail] = useState("");
 
   const isOnlyMe = regType === "only_me";
+  // The voucher covers the registrant's own stay, so it needs a booked room.
+  const canClaimVoucher =
+    isAttendee &&
+    registrant.accommodation !== "" &&
+    qualifiesForVoucher(registrant.accommodation);
+  const claimsVoucher = canClaimVoucher && recreationVoucher;
 
   // ── Load registration on mount ───────────────────────────────────────────
 
@@ -111,12 +134,16 @@ export default function RegistrationUpdatePage() {
 
         const data = (await res.json()) as LoadedRegistration;
 
+        if (data.cancelled) {
+          setLoadState("cancelled");
+          return;
+        }
         if (data.is_paid) {
           setLoadState("paid");
           return;
         }
-        if (data.cancelled) {
-          setLoadState("cancelled");
+        if (data.locked) {
+          setLoadState("payment-sent");
           return;
         }
 
@@ -128,7 +155,6 @@ export default function RegistrationUpdatePage() {
           phone: data.registrant.phone,
           email: data.registrant.email,
           accommodation: data.registrant.accommodation ?? "",
-          recreationVoucher: data.registrant.recreation_voucher ?? false,
           roommatePreference: data.registrant.roommate_preference ?? "",
         });
         setOriginalEmail(data.registrant.email);
@@ -139,13 +165,24 @@ export default function RegistrationUpdatePage() {
             accommodation: a.accommodation,
             phone: a.phone ?? "",
             email: a.email ?? "",
-            recreationVoucher: a.recreation_voucher ?? false,
             roommatePreference: a.roommate_preference ?? "",
           })),
         );
         setNote(data.note ?? "");
         setExtraContribution(
           data.extra_contribution ? String(data.extra_contribution) : "",
+        );
+        setRecreationVoucher(data.recreation_voucher ?? false);
+        setVoucherBilling(
+          data.voucher_billing
+            ? {
+                name: data.voucher_billing.name,
+                surname: data.voucher_billing.surname,
+                address: data.voucher_billing.address,
+                city: data.voucher_billing.city,
+                postalCode: data.voucher_billing.postal_code,
+              }
+            : emptyVoucherBilling(),
         );
         setAttendeeErrors(data.attendees.map(() => ({})));
         setLoadState("ready");
@@ -170,7 +207,6 @@ export default function RegistrationUpdatePage() {
   async function handleEmailBlur() {
     const email = registrant.email.trim();
     if (!email || !EMAIL_RE.test(email) || email === originalEmail) return;
-    setIsCheckingEmail(true);
     try {
       const res = await fetch(
         `${API_BASE}/api/registration/check-email?email=${encodeURIComponent(email)}`,
@@ -180,9 +216,7 @@ export default function RegistrationUpdatePage() {
         setIsEmailTaken(data.exists);
       }
     } catch {
-      // Network failure — backend will catch it on save
-    } finally {
-      setIsCheckingEmail(false);
+      // Network failure — a duplicate is only a warning, so nothing is blocked.
     }
   }
 
@@ -197,6 +231,31 @@ export default function RegistrationUpdatePage() {
     setAttendees(updated);
     if (touched) {
       setAttendeeErrors(updated.map((a) => validateAttendee(a)));
+    }
+  }
+
+  function handleVoucherToggle(checked: boolean) {
+    setRecreationVoucher(checked);
+    if (!checked) {
+      setVoucherErrors({});
+      return;
+    }
+    // Pre-fill the invoice name from the contact details, still editable.
+    setVoucherBilling({
+      ...voucherBilling,
+      name: voucherBilling.name || registrant.name.trim(),
+      surname: voucherBilling.surname || registrant.surname.trim(),
+    });
+  }
+
+  function handleVoucherBillingChange(
+    field: keyof VoucherBilling,
+    value: string,
+  ) {
+    const updated = { ...voucherBilling, [field]: value };
+    setVoucherBilling(updated);
+    if (touched) {
+      setVoucherErrors(validateVoucherBilling(claimsVoucher, updated));
     }
   }
 
@@ -218,10 +277,17 @@ export default function RegistrationUpdatePage() {
 
     const rErr = validateRegistrant(registrant, isAttendee);
     const aErrs = attendees.map(validateAttendee);
+    const vErr = validateVoucherBilling(claimsVoucher, voucherBilling);
     setRegistrantErrors(rErr);
     setAttendeeErrors(aErrs);
+    setVoucherErrors(vErr);
 
-    if (hasErrors(rErr) || isEmailTaken || (!isOnlyMe && aErrs.some(hasErrors)))
+    // A duplicate e-mail only warns — it does not block the save.
+    if (
+      hasErrors(rErr) ||
+      hasErrors(vErr) ||
+      (!isOnlyMe && aErrs.some(hasErrors))
+    )
       return;
 
     const extra = parseInt(extraContribution, 10);
@@ -236,7 +302,6 @@ export default function RegistrationUpdatePage() {
         is_attendee: isAttendee,
         ...(isAttendee && {
           accommodation: registrant.accommodation as Accommodation,
-          recreation_voucher: registrant.recreationVoucher,
           ...(registrant.roommatePreference.trim() && {
             roommate_preference: registrant.roommatePreference.trim(),
           }),
@@ -248,7 +313,6 @@ export default function RegistrationUpdatePage() {
             name: a.name.trim(),
             surname: a.surname.trim(),
             accommodation: a.accommodation as Accommodation,
-            recreation_voucher: a.recreationVoucher,
             ...(a.roommatePreference.trim() && {
               roommate_preference: a.roommatePreference.trim(),
             }),
@@ -257,6 +321,16 @@ export default function RegistrationUpdatePage() {
           })),
       ...(note.trim() && { note: note.trim() }),
       extra_contribution: isNaN(extra) || extra < 0 ? 0 : extra,
+      recreation_voucher: claimsVoucher,
+      ...(claimsVoucher && {
+        voucher_billing: {
+          name: voucherBilling.name.trim(),
+          surname: voucherBilling.surname.trim(),
+          address: voucherBilling.address.trim(),
+          city: voucherBilling.city.trim(),
+          postal_code: voucherBilling.postalCode.trim(),
+        },
+      }),
     };
 
     setSaveState("saving");
@@ -270,9 +344,6 @@ export default function RegistrationUpdatePage() {
       if (res.status === 200) {
         setOriginalEmail(registrant.email.trim());
         setSaveState("saved");
-      } else if (res.status === 409) {
-        setIsEmailTaken(true);
-        setSaveState("email-conflict");
       } else if (res.status === 403) {
         setSaveState("locked");
       } else {
@@ -362,6 +433,15 @@ export default function RegistrationUpdatePage() {
     );
   }
 
+  if (loadState === "payment-sent") {
+    return (
+      <StatusScreen title="Prihlášku už nie je možné meniť">
+        Informácie k úhrade sme vám už poslali, preto je prihláška uzavretá. Ak
+        potrebujete zmenu, kontaktujte nás prosím e-mailom.
+      </StatusScreen>
+    );
+  }
+
   if (loadState === "paid") {
     return (
       <StatusScreen title="Prihláška je uhradená">
@@ -408,10 +488,6 @@ export default function RegistrationUpdatePage() {
     ? "Účastník (platiteľ)"
     : "Kontaktná osoba (platiteľ)";
 
-  const showRegistrantVoucher =
-    isAttendee &&
-    registrant.accommodation !== "" &&
-    qualifiesForVoucher(registrant.accommodation);
 
   return (
     <main className="reg-form-page">
@@ -492,7 +568,7 @@ export default function RegistrationUpdatePage() {
                 <input
                   id="reg-email"
                   type="email"
-                  className={`form-input${registrantErrors.email || isEmailTaken ? " is-invalid" : ""}`}
+                  className={`form-input${registrantErrors.email ? " is-invalid" : ""}`}
                   value={registrant.email}
                   onChange={(e) =>
                     handleRegistrantChange("email", e.target.value)
@@ -505,9 +581,9 @@ export default function RegistrationUpdatePage() {
                   <p className="form-error">{registrantErrors.email}</p>
                 )}
                 {!registrantErrors.email && isEmailTaken && (
-                  <p className="form-error">
-                    Tento e-mail je už prihlásený. Zadajte iný e-mail alebo
-                    použite pôvodný.
+                  <p className="form-warning">
+                    Na tento e-mail už iná prihláška existuje. Uložiť ho môžete,
+                    len si dajte pozor, aby ste si prihlášky nepomýlili.
                   </p>
                 )}
               </div>
@@ -574,25 +650,6 @@ export default function RegistrationUpdatePage() {
                   </div>
                 )}
 
-                {showRegistrantVoucher && (
-                  <div className="form-field">
-                    <label className="form-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={registrant.recreationVoucher}
-                        onChange={(e) =>
-                          handleRegistrantChange(
-                            "recreationVoucher",
-                            e.target.checked,
-                          )
-                        }
-                      />
-                      <span>
-                        Mám záujem uplatniť si rekreačný poukaz u zamestnávateľa
-                      </span>
-                    </label>
-                  </div>
-                )}
               </>
             )}
           </section>
@@ -625,6 +682,17 @@ export default function RegistrationUpdatePage() {
                 + Pridať účastníka
               </button>
             </section>
+          )}
+
+          {/* ── Recreation voucher (registrant only) ─────── */}
+          {canClaimVoucher && (
+            <VoucherSection
+              claimed={recreationVoucher}
+              billing={voucherBilling}
+              errors={voucherErrors}
+              onToggle={handleVoucherToggle}
+              onBillingChange={handleVoucherBillingChange}
+            />
           )}
 
           {/* ── Voluntary contribution ──────────────────── */}
@@ -725,9 +793,7 @@ export default function RegistrationUpdatePage() {
             <button
               type="submit"
               className="reg-form__submit"
-              disabled={
-                isEmailTaken || isCheckingEmail || saveState === "saving"
-              }
+              disabled={saveState === "saving"}
             >
               {saveState === "saving" ? "Ukladám…" : "Uložiť zmeny"}
             </button>
