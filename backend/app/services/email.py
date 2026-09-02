@@ -151,49 +151,49 @@ def _build_full_registration_message(
     message["To"] = to_email
 
     count = len(attendee_names)
-    if count > 0:
-        person_word = "osoba" if count == 1 else ("osoby" if count < 5 else "osôb")
-        heading = f"Prihlásili ste {count} {person_word}:"
-        attendee_line_text = (
-            heading + "\n" + "".join(f"  – {n}\n" for n in attendee_names)
-        )
-        list_items = "".join(
-            f"        <li>{escape(n)}</li>\n" for n in attendee_names
-        )
-        attendee_line_html = (
-            f"      <p>{heading}</p>\n"
-            f'      <ul style="margin: 0.5rem 0 1.25rem; padding-left: 1.25rem;">\n'
-            f"{list_items}"
-            "      </ul>\n"
-        )
-    else:
-        attendee_line_text = ""
-        attendee_line_html = ""
+    person_word = "osoba" if count == 1 else ("osoby" if count > 1 and count < 5 else "osôb")
+    list_items = "".join(
+        f"        <li>{escape(name)}</li>\n" for name in attendee_names
+    )
+
+    attendee_text = "".join(f"- {name}\n" for name in attendee_names)
+    attendee_html = (
+        "      <ul style=\"margin: 0.5rem 0 1.25rem; padding-left: 1.25rem;\">\n"
+        f"{list_items}"
+        "      </ul>\n"
+        if attendee_names
+        else ""
+    )
 
     text_body = f"""\
 Dobrý deň, {registrant_name},
 
-vašu prihlášku na {EVENT_NAME} sme prijali.
-{attendee_line_text}
-Termín: {EVENT_DATES}
+prijali sme vašu prihlášku na {EVENT_NAME}.
+
+Prihlásili ste {count} {person_word}:
+
+{attendee_text}Termín: {EVENT_DATES}
 Miesto: {EVENT_PLACE}
 
 Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.
 
-Informácie k úhrade vám pošleme v samostatnom e-maile.
+Informácie k úhrade vám pošleme v samostatnom e-maily.
 
-Prihlášku môžete upraviť alebo zrušiť cez tento odkaz — platí do chvíle,
-kým vám pošleme informácie k úhrade:
+Prihlášku môžete upraviť alebo zrušiť cez tento odkaz:
 {update_link}
+
+Keď dostanete informácie k úhrade, prihláška sa už nebude dať upraviť.
 
 {SIGNATURE_TEXT}"""
 
     html_body = f"""\
 {HTML_OPEN}      <p>Dobrý deň, <strong>{registrant_name}</strong>,</p>
 
-      <p>vašu prihlášku na <strong>{EVENT_NAME}</strong> sme prijali.</p>
+      <p>prijali sme vašu prihlášku na <strong>{EVENT_NAME}</strong>.</p>
 
-{attendee_line_html}
+      <p>Prihlásili ste {count} {person_word}:</p>
+
+{attendee_html}
       <table style="border-collapse: collapse; margin: 1.25rem 0;">
         <tr>
           <td style="padding: 4px 16px 4px 0; color: #6b7280;">Termín:</td>
@@ -207,13 +207,12 @@ kým vám pošleme informácie k úhrade:
 
       <p>Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.</p>
 
-      <p>Informácie k úhrade vám pošleme v samostatnom e-maile.</p>
+      <p>Informácie k úhrade vám pošleme v samostatnom e-maily.</p>
 
-      <p>
-        Prihlášku môžete upraviť alebo zrušiť cez tento odkaz — platí do chvíle,
-        kým vám pošleme informácie k úhrade:<br>
-        <a href="{update_link}">{update_link}</a>
-      </p>
+      <p>Prihlášku môžete upraviť alebo zrušiť cez tento odkaz:</p>
+      <p><a href="{update_link}">{update_link}</a></p>
+
+      <p>Keď dostanete informácie k úhrade, prihláška sa už nebude dať upraviť.</p>
 
 {SIGNATURE_HTML}{HTML_CLOSE}"""
 
