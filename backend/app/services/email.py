@@ -10,9 +10,6 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-GMAIL_SMTP_HOST = "smtp.gmail.com"
-GMAIL_SMTP_PORT = 465
-
 EVENT_NAME = "Vzdelávanie EVS 2026"
 EVENT_DATES = "23. – 25. októbra 2026"
 EVENT_PLACE = "Hotel Máj***, Liptovský Ján"
@@ -49,21 +46,22 @@ HTML_CLOSE = """\
 
 
 def _smtp_send(mime_message: MIMEMultipart) -> None:
-    """Send a pre-built MIME message via Gmail SMTP using an App Password."""
+    """Send a pre-built MIME message via the configured SMTP server."""
     settings = get_settings()
-    with smtplib.SMTP_SSL(GMAIL_SMTP_HOST, GMAIL_SMTP_PORT) as smtp:
-        smtp.login(settings.gmail_user, settings.gmail_app_password)
+    with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as smtp:
+        smtp.login(settings.smtp_user, settings.smtp_password)
         smtp.send_message(mime_message)
 
 
 def _credentials_missing() -> list[str]:
-    """Return the names of Gmail settings that are not configured."""
+    """Return the names of SMTP settings that are not configured."""
     settings = get_settings()
     return [
         k
         for k, v in {
-            "GMAIL_USER": settings.gmail_user,
-            "GMAIL_APP_PASSWORD": settings.gmail_app_password,
+            "SMTP_HOST": settings.smtp_host,
+            "SMTP_USER": settings.smtp_user,
+            "SMTP_PASSWORD": settings.smtp_password,
         }.items()
         if not v
     ]
@@ -79,7 +77,7 @@ async def _dispatch(send_fn, to_email: str, *args) -> None:
 
     if missing := _credentials_missing():
         logger.warning(
-            "[email] Gmail credentials not configured – skipping. Missing: %s",
+            "[email] SMTP credentials not configured – skipping. Missing: %s",
             ", ".join(missing),
         )
         return
@@ -126,7 +124,7 @@ Akonáhle otvoríme prihlasovanie, budeme vás informovať medzi prvými.
 
 def _send_via_smtp(to_email: str) -> None:
     settings = get_settings()
-    _smtp_send(_build_message(settings.gmail_user, to_email))
+    _smtp_send(_build_message(settings.smtp_user, to_email))
 
 
 async def send_registration_confirmation(to_email: str) -> None:
@@ -227,7 +225,7 @@ def _send_full_registration_via_smtp(
     settings = get_settings()
     _smtp_send(
         _build_full_registration_message(
-            settings.gmail_user, to_email, registrant_name, attendee_names, update_link
+            settings.smtp_user, to_email, registrant_name, attendee_names, update_link
         )
     )
 
@@ -358,7 +356,7 @@ def _send_payment_info_via_smtp(
     settings = get_settings()
     _smtp_send(
         _build_payment_info_message(
-            settings.gmail_user,
+            settings.smtp_user,
             to_email,
             registrant_name,
             iban,
@@ -453,7 +451,7 @@ def _send_sub_attendee_notification_via_smtp(
     settings = get_settings()
     _smtp_send(
         _build_sub_attendee_notification_message(
-            settings.gmail_user, to_email, attendee_name, registered_by_name
+            settings.smtp_user, to_email, attendee_name, registered_by_name
         )
     )
 
@@ -517,7 +515,7 @@ informácie k programu. Tešíme sa na vás!
 def _send_payment_received_via_smtp(to_email: str, registrant_name: str, variable_symbol: str) -> None:
     settings = get_settings()
     _smtp_send(
-        _build_payment_received_message(settings.gmail_user, to_email, registrant_name, variable_symbol)
+        _build_payment_received_message(settings.smtp_user, to_email, registrant_name, variable_symbol)
     )
 
 

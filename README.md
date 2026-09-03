@@ -17,7 +17,7 @@ Rovnaký e-mail smie podať viac prihlášok — formulár na duplicitu len upoz
 | Frontend | React 18 + Vite 5 + TypeScript            |
 | Backend  | FastAPI + UV + Motor (async MongoDB)      |
 | Database | MongoDB Atlas — databáza `evs-vzdelavanie-2026` |
-| Email    | Gmail SMTP (App Password)                 |
+| Email    | SMTP                                      |
 | E2E      | Playwright                                |
 
 ## Project structure
@@ -91,7 +91,7 @@ Ceny sú definované na dvoch miestach a musia zostať zosúladené:
 ```bash
 cd backend
 
-cp .env.example .env       # doplniť MONGODB_URI, GMAIL_*, BANK_*, JWT_SECRET
+cp .env.example .env       # doplniť MONGODB_URI, SMTP_*, BANK_*, JWT_SECRET
 uv sync
 uv run uvicorn app.main:app --reload --port 8008
 # API na http://localhost:8008 — dev proxy frontendu mieri na tento port
@@ -133,12 +133,12 @@ mockované cez `page.route`.
 | `MONGODB_DB`       | `evs-vzdelavanie-2026`                                        |
 | `APP_BASE_URL`     | Verejná URL frontendu — z nej sa skladá odkaz na úpravu prihlášky v e-maile |
 | `EMAIL_ENABLED`    | `false` vypne všetky odchádzajúce e-maily (vývoj)             |
-| `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Gmail SMTP App Password                       |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Prihlasovacie údaje SMTP servera        |
 | `BANK_IBAN`, `BANK_NAME`, `BANK_BENEFICIARY` | Údaje do platobného e-mailu a QR kódu |
 | `JWT_SECRET`       | Podpisovanie admin tokenov                                    |
 
-Bez `GMAIL_APP_PASSWORD` sa e-maily preskočia (zaloguje sa varovanie),
-registrácia však prebehne normálne.
+Bez `SMTP_HOST`, `SMTP_USER` alebo `SMTP_PASSWORD` sa e-maily preskočia
+(zaloguje sa varovanie), registrácia však prebehne normálne.
 
 ## Admin
 

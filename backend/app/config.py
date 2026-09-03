@@ -21,9 +21,11 @@ class Settings(BaseSettings):
     # Email
     email_enabled: bool = True
 
-    # Gmail SMTP
-    gmail_user: str = ""
-    gmail_app_password: str = ""
+    # SMTP
+    smtp_host: str = ""
+    smtp_port: int = 465
+    smtp_user: str = ""
+    smtp_password: str = ""
 
     # Bank (payment info)
     bank_iban: str = ""
