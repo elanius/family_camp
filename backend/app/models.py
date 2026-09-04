@@ -185,6 +185,10 @@ class PaymentInfoResponse(BaseModel):
     qr_string: str
     # Price computed from the packages + contribution, for comparison with `amount`.
     calculated_amount: int
+    # With a recreation voucher only the voluntary contribution is transferred —
+    # the stay itself is settled at the hotel, for `hotel_amount`.
+    recreation_voucher: bool = False
+    hotel_amount: int = 0
 
 
 class AdminActionRequest(BaseModel):

@@ -8,6 +8,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.models import RegistrationRecord, RegistrationRequest, RegistrationTokenResponse
 from app.services.email import send_full_registration_confirmation, send_sub_attendee_notification
+from app.services.pricing import hotel_amount, transfer_amount
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,15 @@ async def register(payload: RegistrationRequest) -> dict:
     settings = get_settings()
     update_link = f"{settings.app_base_url}/update/{token}"
 
+    # What the confirmation promises depends on who gets paid: a recreation voucher
+    # moves the stay to the hotel and leaves only the contribution to transfer.
+    registrant = payload.registrant.model_dump()
+    attendees = [a.model_dump() for a in payload.attendees]
+    at_hotel = hotel_amount(registrant, attendees, payload.recreation_voucher)
+    due = transfer_amount(
+        registrant, attendees, payload.extra_contribution, payload.recreation_voucher
+    )
+
     # Send confirmation email to the main registrant
     try:
         await send_full_registration_confirmation(
@@ -95,6 +105,8 @@ async def register(payload: RegistrationRequest) -> dict:
             registrant_name=payload.registrant.name,
             attendee_names=_attendee_full_names(payload),
             update_link=update_link,
+            hotel_amount=at_hotel,
+            transfer_due=due,
         )
     except Exception:
         logger.warning("Confirmation email failed for %s – continuing.", payload.registrant.email)

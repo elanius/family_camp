@@ -69,23 +69,31 @@ export default function AdminPage() {
 
   const countByStatus = (s: RegistrationStatus) => items.filter((i) => i.status === s).length;
 
-  const { totalPeople, totalAmount, totalVouchers } = useMemo(() => {
+  const { totalPeople, totalAmount, totalAtHotel, totalVouchers } = useMemo(() => {
     let people = 0;
     let amount = 0;
+    let atHotel = 0;
     let vouchers = 0;
     for (const item of items) {
       if (item.status === "rejected") continue;
       const attending = toPeople(item);
       people += attending.length;
       if (item.recreation_voucher) vouchers += 1;
-      // Count what was actually invoiced when it differs from the calculation.
-      const calculated = calculatePrice(
+      const pricing = calculatePrice(
         attending,
         item.extra_contribution ?? 0,
-      ).total;
-      amount += effectiveAmount(item, calculated);
+        item.recreation_voucher ?? false,
+      );
+      // Count what was actually invoiced when it differs from the calculation.
+      amount += effectiveAmount(item, pricing.amountDue);
+      atHotel += pricing.paidAtHotel;
     }
-    return { totalPeople: people, totalAmount: amount, totalVouchers: vouchers };
+    return {
+      totalPeople: people,
+      totalAmount: amount,
+      totalAtHotel: atHotel,
+      totalVouchers: vouchers,
+    };
   }, [items]);
 
   return (
@@ -147,6 +155,11 @@ export default function AdminPage() {
             <span className="text-gray-600">
               Expected: <span className="font-semibold text-green-800">€{totalAmount}</span>
             </span>
+            {totalAtHotel > 0 && (
+              <span className="text-gray-600" title="Voucher stays settled at the hotel">
+                At hotel: <span className="font-semibold text-amber-700">€{totalAtHotel}</span>
+              </span>
+            )}
             <span className="text-gray-600">
               Vouchers: <span className="font-semibold text-amber-700">{totalVouchers}</span>
             </span>

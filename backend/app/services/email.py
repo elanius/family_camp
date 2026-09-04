@@ -153,8 +153,48 @@ async def send_registration_confirmation(to_email: str) -> None:
 # ── Full registration confirmation ───────────────────────────────────────
 
 
+def _payment_paragraphs(hotel_amount: int, transfer_due: int) -> tuple[str, str]:
+    """The "how you pay" part of the confirmation, as (plain text, html).
+
+    A recreation voucher moves the stay to the hotel reception; only what is left
+    (the voluntary contribution, if any) is invoiced by e-mail.
+    """
+    texts: list[str] = []
+    htmls: list[str] = []
+
+    if hotel_amount:
+        texts.append(
+            f"Ubytovanie a stravu ({hotel_amount} EUR) uhradíte priamo v hoteli pri\n"
+            "príchode — hotel vám na fakturačné údaje z prihlášky vystaví faktúru\n"
+            "potrebnú na uplatnenie rekreačného poukazu."
+        )
+        htmls.append(
+            "      <p>\n"
+            f"        Ubytovanie a stravu (<strong>{hotel_amount} EUR</strong>) uhradíte priamo\n"
+            "        v hoteli pri príchode — hotel vám na fakturačné údaje z prihlášky\n"
+            "        vystaví faktúru potrebnú na uplatnenie rekreačného poukazu.\n"
+            "      </p>"
+        )
+
+    if transfer_due:
+        what = "k úhrade dobrovoľného príspevku" if hotel_amount else "k úhrade"
+        texts.append(f"Informácie {what} vám pošleme v samostatnom e-maily.")
+        htmls.append(f"      <p>Informácie {what} vám pošleme v samostatnom e-maily.</p>")
+    elif hotel_amount:
+        texts.append("Nič ďalšie prevodom neuhrádzate.")
+        htmls.append("      <p>Nič ďalšie prevodom neuhrádzate.</p>")
+
+    return "\n\n".join(texts), "\n".join(htmls)
+
+
 def _build_full_registration_message(
-    sender: str, to_email: str, registrant_name: str, attendee_names: list[str], update_link: str
+    sender: str,
+    to_email: str,
+    registrant_name: str,
+    attendee_names: list[str],
+    update_link: str,
+    hotel_amount: int = 0,
+    transfer_due: int = 0,
 ) -> MIMEMultipart:
     message = MIMEMultipart("alternative")
     message["Subject"] = f"{EVENT_NAME} – potvrdenie prihlášky"
@@ -165,6 +205,19 @@ def _build_full_registration_message(
     person_word = "osoba" if count == 1 else ("osoby" if count > 1 and count < 5 else "osôb")
     list_items = "".join(
         f"        <li>{escape(name)}</li>\n" for name in attendee_names
+    )
+
+    payment_text, payment_html = _payment_paragraphs(hotel_amount, transfer_due)
+    # The update link only closes when a payment e-mail follows.
+    lock_text = (
+        "\nKeď dostanete informácie k úhrade, prihláška sa už nebude dať upraviť.\n"
+        if transfer_due
+        else ""
+    )
+    lock_html = (
+        "\n      <p>Keď dostanete informácie k úhrade, prihláška sa už nebude dať upraviť.</p>\n"
+        if transfer_due
+        else ""
     )
 
     attendee_text = "".join(f"- {name}\n" for name in attendee_names)
@@ -188,13 +241,11 @@ Miesto: {EVENT_PLACE}
 
 Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.
 
-Informácie k úhrade vám pošleme v samostatnom e-maily.
+{payment_text}
 
 Prihlášku môžete upraviť alebo zrušiť cez tento odkaz:
 {update_link}
-
-Keď dostanete informácie k úhrade, prihláška sa už nebude dať upraviť.
-
+{lock_text}
 {SIGNATURE_TEXT}"""
 
     html_body = f"""\
@@ -218,13 +269,11 @@ Keď dostanete informácie k úhrade, prihláška sa už nebude dať upraviť.
 
       <p>Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.</p>
 
-      <p>Informácie k úhrade vám pošleme v samostatnom e-maily.</p>
+{payment_html}
 
       <p>Prihlášku môžete upraviť alebo zrušiť cez tento odkaz:</p>
       <p><a href="{update_link}">{update_link}</a></p>
-
-      <p>Keď dostanete informácie k úhrade, prihláška sa už nebude dať upraviť.</p>
-
+{lock_html}
 {SIGNATURE_HTML}{HTML_CLOSE}"""
 
     message.attach(MIMEText(text_body, "plain", "utf-8"))
@@ -233,23 +282,45 @@ Keď dostanete informácie k úhrade, prihláška sa už nebude dať upraviť.
 
 
 def _send_full_registration_via_smtp(
-    to_email: str, registrant_name: str, attendee_names: list[str], update_link: str
+    to_email: str,
+    registrant_name: str,
+    attendee_names: list[str],
+    update_link: str,
+    hotel_amount: int,
+    transfer_due: int,
 ) -> None:
     settings = get_settings()
     _smtp_send(
         _build_full_registration_message(
-            settings.smtp_user, to_email, registrant_name, attendee_names, update_link
+            settings.smtp_user,
+            to_email,
+            registrant_name,
+            attendee_names,
+            update_link,
+            hotel_amount,
+            transfer_due,
         )
     )
 
 
 async def send_full_registration_confirmation(
-    to_email: str, registrant_name: str, attendee_names: list[str], update_link: str
+    to_email: str,
+    registrant_name: str,
+    attendee_names: list[str],
+    update_link: str,
+    hotel_amount: int = 0,
+    transfer_due: int = 0,
 ) -> None:
     logger.debug("[email] send_full_registration_confirmation called for %s", to_email)
     try:
         await _dispatch(
-            _send_full_registration_via_smtp, to_email, registrant_name, attendee_names, update_link
+            _send_full_registration_via_smtp,
+            to_email,
+            registrant_name,
+            attendee_names,
+            update_link,
+            hotel_amount,
+            transfer_due,
         )
         logger.info("[email] Full registration confirmation email sent to %s", to_email)
     except Exception:
@@ -540,4 +611,109 @@ async def send_payment_received_confirmation(to_email: str, registrant_name: str
         logger.info("[email] Payment received confirmation sent to %s", to_email)
     except Exception:
         logger.exception("[email] Unexpected error sending payment received email to %s", to_email)
+        raise
+
+
+# ── Registration accepted (final) email ──────────────────────────────────
+
+
+def _build_registration_accepted_message(
+    sender: str, to_email: str, registrant_name: str, hotel_amount: int
+) -> MIMEMultipart:
+    message = MIMEMultipart("alternative")
+    message["Subject"] = f"{EVENT_NAME} – prihláška potvrdená"
+    message["From"] = sender
+    message["To"] = to_email
+
+    # Only a recreation voucher registration pays anything at the reception.
+    hotel_text = (
+        f"""
+Ubytovanie a stravu ({hotel_amount} EUR) uhradíte priamo v hoteli pri príchode —
+hotel vám na fakturačné údaje z prihlášky vystaví faktúru, ktorú potrebujete
+na uplatnenie rekreačného poukazu.
+"""
+        if hotel_amount
+        else ""
+    )
+
+    hotel_html = (
+        f"""
+      <p>
+        Ubytovanie a stravu (<strong>{hotel_amount} EUR</strong>) uhradíte priamo
+        v hoteli pri príchode — hotel vám na fakturačné údaje z prihlášky vystaví
+        faktúru, ktorú potrebujete na uplatnenie rekreačného poukazu.
+      </p>
+"""
+        if hotel_amount
+        else ""
+    )
+
+    text_body = f"""\
+Dobrý deň, {registrant_name},
+
+vaša prihláška na {EVENT_NAME} je potvrdená. Tešíme sa na vás!
+
+Termín: {EVENT_DATES}
+Miesto: {EVENT_PLACE}
+
+Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.
+{hotel_text}
+Pred pobytom vám pošleme ešte podrobné informácie k programu.
+
+{SIGNATURE_TEXT}"""
+
+    html_body = f"""\
+{HTML_OPEN}      <p>Dobrý deň, <strong>{registrant_name}</strong>,</p>
+
+      <p>
+        vaša prihláška na <strong>{EVENT_NAME}</strong> je potvrdená.
+        Tešíme sa na vás!
+      </p>
+
+      <table style="border-collapse: collapse; margin: 1.25rem 0;">
+        <tr>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Termín:</td>
+          <td style="padding: 4px 0;"><strong>{EVENT_DATES}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 16px 4px 0; color: #6b7280;">Miesto:</td>
+          <td style="padding: 4px 0;"><strong>{EVENT_PLACE}</strong></td>
+        </tr>
+      </table>
+
+      <p>Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.</p>
+{hotel_html}
+      <p>Pred pobytom vám pošleme ešte podrobné informácie k programu.</p>
+
+{SIGNATURE_HTML}{HTML_CLOSE}"""
+
+    message.attach(MIMEText(text_body, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
+    return message
+
+
+def _send_registration_accepted_via_smtp(
+    to_email: str, registrant_name: str, hotel_amount: int
+) -> None:
+    settings = get_settings()
+    _smtp_send(
+        _build_registration_accepted_message(
+            settings.smtp_user, to_email, registrant_name, hotel_amount
+        )
+    )
+
+
+async def send_registration_accepted_email(
+    to_email: str, registrant_name: str, hotel_amount: int = 0
+) -> None:
+    """Closing e-mail sent when the admin accepts the registration.
+
+    `hotel_amount` > 0 means the stay is settled at the hotel (recreation voucher).
+    """
+    logger.debug("[email] send_registration_accepted_email called for %s", to_email)
+    try:
+        await _dispatch(_send_registration_accepted_via_smtp, to_email, registrant_name, hotel_amount)
+        logger.info("[email] Registration accepted email sent to %s", to_email)
+    except Exception:
+        logger.exception("[email] Unexpected error sending accepted email to %s", to_email)
         raise

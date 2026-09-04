@@ -42,12 +42,18 @@ export interface PriceBreakdown {
   /** Sum of the accommodation packages, without the voluntary contribution. */
   accommodationTotal: number;
   extraContribution: number;
+  /** Full price of the stay plus the contribution, whoever ends up collecting it. */
   total: number;
+  /** Settled at the hotel reception — the stay, when the recreation voucher is claimed. */
+  paidAtHotel: number;
+  /** Transferred to EVS: the contribution alone once the voucher moves the stay. */
+  amountDue: number;
 }
 
 export function calculatePrice(
   people: PricePerson[],
   extraContribution = 0,
+  recreationVoucher = false,
 ): PriceBreakdown {
   const items: PriceLineItem[] = people.map((p) => ({
     name: `${p.name} ${p.surname}`.trim(),
@@ -57,11 +63,14 @@ export function calculatePrice(
 
   const accommodationTotal = items.reduce((sum, item) => sum + item.price, 0);
   const extra = Math.max(0, Math.round(extraContribution) || 0);
+  const paidAtHotel = recreationVoucher ? accommodationTotal : 0;
 
   return {
     items,
     accommodationTotal,
     extraContribution: extra,
     total: accommodationTotal + extra,
+    paidAtHotel,
+    amountDue: accommodationTotal + extra - paidAtHotel,
   };
 }

@@ -31,7 +31,7 @@ family_camp/
 │   │   ├── database.py
 │   │   ├── models.py
 │   │   ├── routers/{register,registration,admin}.py
-│   │   └── services/{email,auth}.py
+│   │   └── services/{email,auth,pricing}.py
 │   ├── scripts/create_admin.py
 │   ├── pyproject.toml
 │   └── .env.example
@@ -73,9 +73,24 @@ objednaný pobyt. Po zaškrtnutí sa vypĺňajú fakturačné údaje pre hotel
 (`voucher_billing`: meno, priezvisko, adresa, mesto, PSČ) — hotel na ne vystaví
 faktúru potrebnú na uplatnenie poukazu.
 
-Ceny sú definované na dvoch miestach a musia zostať zosúladené:
-[`frontend/src/utils/pricing.ts`](frontend/src/utils/pricing.ts) a
-`_ACCOMMODATION_PRICE` v [`backend/app/routers/admin.py`](backend/app/routers/admin.py).
+### Kto inkasuje čo
+
+Pri rekreačnom poukaze sa **pobyt platí priamo v hoteli na mieste**, nie
+prevodom vopred. EVS teda fakturuje len dobrovoľný príspevok:
+
+| Prihláška                      | V hoteli na mieste | Prevodom pre EVS       |
+|--------------------------------|--------------------|------------------------|
+| bez poukazu                    | 0 €                | pobyt + príspevok      |
+| poukaz + dobrovoľný príspevok  | pobyt              | príspevok              |
+| poukaz bez príspevku           | pobyt              | 0 € — neplatí sa nič   |
+
+Zhrnutie prihlášky toto rozdelenie zobrazí a upozorní, že pobyt sa hradí
+v hoteli; potvrdzovací e-mail sľubuje platobné informácie len vtedy, keď je
+naozaj čo uhrádzať.
+
+Ceny a toto rozdelenie sú definované na dvoch miestach a musia zostať
+zosúladené: [`frontend/src/utils/pricing.ts`](frontend/src/utils/pricing.ts) a
+[`backend/app/services/pricing.py`](backend/app/services/pricing.py).
 
 ## Getting started
 
@@ -153,6 +168,12 @@ Stavy prihlášky: `new → wait_for_payment → paid → accepted`, kedykoľvek
 `rejected`. Verejný odkaz na úpravu funguje len v stave `new` — odoslaním
 platobných informácií (`wait_for_payment`) sa prihláška uzavrie, aby sa
 nerozišla s už oznámenou sumou.
+
+Keď prihláška nemá čo uhrádzať prevodom (poukaz bez príspevku), platobné kroky
+odpadajú: `send_payment_info` sa odmietne a administrátor prihlášku prijme
+rovno z `new` (`new → accepted`). Akcia `accept` v oboch prípadoch odošle
+záverečný e-mail o potvrdení prihlášky — pri poukaze aj so sumou, ktorú
+účastník zaplatí v hoteli.
 
 Pri označení platby ako prijatej vyberá administrátor v kalendári **dátum
 prijatia platby** (predvolene dnešok, spätne ľubovoľný starší deň, budúce dátumy

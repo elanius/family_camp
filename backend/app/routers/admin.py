@@ -21,7 +21,17 @@ from app.models import (
     TokenResponse,
 )
 from app.services.auth import create_access_token, get_current_admin, verify_password
-from app.services.email import send_payment_info_email, send_payment_received_confirmation
+from app.services.email import (
+    send_payment_info_email,
+    send_payment_received_confirmation,
+    send_registration_accepted_email,
+)
+from app.services.pricing import (
+    amount_due,
+    hotel_amount,
+    transfer_amount,
+    voucher_claimed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +47,17 @@ _ACTION_REQUIRES: dict[str, tuple[str, ...]] = {
     "send_payment_info": ("new",),
     "payment_received": ("wait_for_payment",),
     "accept": ("paid",),
+    "reject": ("new", "wait_for_payment", "paid"),
+}
+
+# Nothing to transfer — a recreation voucher stay without a voluntary contribution.
+# The two payment steps fall away and the admin accepts the registration straight
+# from "new". "payment_received" stays reachable so a registration that was already
+# waiting for a payment cannot get stuck.
+_ACTION_REQUIRES_NO_PAYMENT: dict[str, tuple[str, ...]] = {
+    "send_payment_info": (),
+    "payment_received": ("wait_for_payment",),
+    "accept": ("new", "paid"),
     "reject": ("new", "wait_for_payment", "paid"),
 }
 
@@ -64,15 +85,6 @@ def _effective_status(doc: dict) -> RegistrationStatus:
     return "new"
 
 
-def _voucher_claimed(doc: dict) -> bool:
-    """Top-level voucher flag, falling back to the legacy per-person flags."""
-    if "recreation_voucher" in doc:
-        return bool(doc["recreation_voucher"])
-    if doc.get("registrant", {}).get("recreation_voucher"):
-        return True
-    return any(a.get("recreation_voucher") for a in doc.get("attendees", []))
-
-
 def _as_date(value: object) -> Optional[date]:
     """Mongo hands back a datetime; the API exposes a plain date."""
     if isinstance(value, datetime):
@@ -90,7 +102,7 @@ def _doc_to_item(doc: dict) -> AdminRegistrationItem:
         attendees=doc.get("attendees", []),
         note=doc.get("note"),
         extra_contribution=doc.get("extra_contribution", 0),
-        recreation_voucher=_voucher_claimed(doc),
+        recreation_voucher=voucher_claimed(doc),
         voucher_billing=doc.get("voucher_billing"),
         status=_effective_status(doc),
         registered_at=doc["registered_at"],
@@ -99,22 +111,6 @@ def _doc_to_item(doc: dict) -> AdminRegistrationItem:
         payment_amount=doc.get("payment_amount"),
         payment_received_at=_as_date(doc.get("payment_received_at")),
     )
-
-
-# ── Pricing (mirrors frontend pricing.ts) ───────────────────────────────
-
-_ACCOMMODATION_PRICE = {"double": 179, "single": 219, "none": 0}
-
-
-def _calculate_total_amount(
-    registrant: dict, attendees: list[dict], extra_contribution: int = 0
-) -> int:
-    total = 0
-    if registrant.get("is_attendee") and registrant.get("accommodation"):
-        total += _ACCOMMODATION_PRICE.get(registrant["accommodation"], 0)
-    for a in attendees:
-        total += _ACCOMMODATION_PRICE.get(a.get("accommodation"), 0)
-    return total + max(0, int(extra_contribution or 0))
 
 
 async def _ensure_variable_symbol(collection, oid: ObjectId, doc: dict) -> str:
@@ -202,8 +198,15 @@ async def apply_action(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
 
     current_status = _effective_status(doc)
-    allowed_from = _ACTION_REQUIRES[action]
+    due = amount_due(doc)
+    requires = _ACTION_REQUIRES if due > 0 else _ACTION_REQUIRES_NO_PAYMENT
+    allowed_from = requires[action]
 
+    if not allowed_from:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Action '{action}' is not available – this registration has nothing to pay.",
+        )
     if current_status not in allowed_from:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -248,6 +251,20 @@ async def apply_action(
         except Exception:
             logger.warning("Payment received email failed for %s – status already updated.", registrant["email"])
 
+    if action == "accept":
+        # Closing e-mail: the registration is final. A voucher stay is settled at
+        # the hotel, so the amount to pay there goes with it.
+        registrant = doc["registrant"]
+        at_hotel = hotel_amount(registrant, doc.get("attendees", []), voucher_claimed(doc))
+        try:
+            await send_registration_accepted_email(
+                to_email=registrant["email"],
+                registrant_name=registrant["name"],
+                hotel_amount=at_hotel,
+            )
+        except Exception:
+            logger.warning("Acceptance email failed for %s – status already updated.", registrant["email"])
+
     doc.update(changes)
     return _doc_to_item(doc)
 
@@ -274,9 +291,13 @@ async def get_payment_info(
     settings = get_settings()
     vs = await _ensure_variable_symbol(collection, oid, doc)
     registrant = doc["registrant"]
-    calculated_amount = _calculate_total_amount(
-        registrant, doc.get("attendees", []), doc.get("extra_contribution", 0)
+    attendees = doc.get("attendees", [])
+    voucher = voucher_claimed(doc)
+    calculated_amount = transfer_amount(
+        registrant, attendees, doc.get("extra_contribution", 0), voucher
     )
+    # Settled at the hotel reception instead of by transfer.
+    at_hotel = hotel_amount(registrant, attendees, voucher)
     # A previously sent amount wins — that is what the registrant was asked to pay.
     stored_amount = doc.get("payment_amount")
     amount = int(stored_amount) if stored_amount is not None else calculated_amount
@@ -296,6 +317,8 @@ async def get_payment_info(
         attendee_count=len(doc.get("attendees", [])),
         qr_string=qr_string,
         calculated_amount=calculated_amount,
+        recreation_voucher=voucher,
+        hotel_amount=at_hotel,
     )
 
 
@@ -333,6 +356,11 @@ async def send_payment_info_endpoint(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"send_payment_info is not allowed from status '{current_status}'.",
+        )
+    if amount_due(doc) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Nothing to pay – accept the registration instead of sending payment info.",
         )
 
     new_status: RegistrationStatus = "wait_for_payment"

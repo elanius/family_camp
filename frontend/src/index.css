@@ -908,6 +908,18 @@ textarea.form-input {
   color: var(--color-muted);
 }
 
+/* Who collects what — shown when a recreation voucher moves the stay to the hotel. */
+.price-preview__split {
+  list-style: none;
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.price-preview__split .price-preview__item:last-child {
+  border-bottom: none;
+}
+
 /* ── Summary ──────────────────────────────────────────────────────────── */
 .summary-section {
   margin-bottom: 2rem;
@@ -963,6 +975,18 @@ textarea.form-input {
   font-weight: 600;
   color: var(--color-heading);
   text-align: right;
+}
+
+/* Standing notice in a summary section — e.g. the stay is paid at the hotel. */
+.summary-notice {
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: #8a6320;
+  background: #fdf6e7;
+  border: 1px solid #ecd9ac;
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  margin-top: 0.85rem;
 }
 
 .reg-summary__actions {

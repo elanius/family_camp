@@ -16,6 +16,9 @@ interface PaymentInfo {
   attendee_count: number;
   qr_string: string;
   calculated_amount: number;
+  /** The stay is settled at the hotel; only the contribution is transferred. */
+  recreation_voucher: boolean;
+  hotel_amount: number;
 }
 
 const DEBOUNCE_MS = 600;
@@ -39,6 +42,7 @@ export default function PaymentInfoPage() {
   const [recipientNote, setRecipientNote] = useState("");
   const [qrString, setQrString] = useState("");
   const [calculatedAmount, setCalculatedAmount] = useState(0);
+  const [hotelAmount, setHotelAmount] = useState(0);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,6 +66,7 @@ export default function PaymentInfoPage() {
         setRecipientNote(data.recipient_note);
         setQrString(data.qr_string);
         setCalculatedAmount(data.calculated_amount);
+        setHotelAmount(data.recreation_voucher ? data.hotel_amount : 0);
       })
       .catch((e: unknown) => setFetchError((e as Error).message))
       .finally(() => setLoading(false));
@@ -152,6 +157,12 @@ export default function PaymentInfoPage() {
           <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Recipient</p>
           <p className="font-semibold text-gray-900">{registrantName}</p>
           <p className="text-sm text-gray-500">{registrantEmail}</p>
+          {hotelAmount > 0 && (
+            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              🎟 Recreation voucher — the stay (€{hotelAmount}) is paid at the
+              hotel. Only the voluntary contribution is transferred.
+            </p>
+          )}
         </div>
 
         {/* Payment details form */}

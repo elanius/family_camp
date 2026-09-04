@@ -91,6 +91,7 @@ export default function RegistrationSummaryPage() {
   const priceBreakdown = calculatePrice(
     pricePeople,
     payload.extra_contribution,
+    payload.recreation_voucher,
   );
 
   async function handleRegister() {
@@ -258,6 +259,12 @@ export default function RegistrationSummaryPage() {
                 </span>
               </div>
             </div>
+            <p className="summary-notice">
+              Ubytovanie a stravu ({priceBreakdown.paidAtHotel}&nbsp;€) uhradíte
+              priamo v hoteli na mieste — nie prevodom vopred. Hotel vám na
+              uvedené fakturačné údaje vystaví faktúru potrebnú na uplatnenie
+              poukazu.
+            </p>
           </section>
         )}
 
@@ -305,6 +312,26 @@ export default function RegistrationSummaryPage() {
                 <span>Celková suma</span>
                 <strong>{priceBreakdown.total}&nbsp;€</strong>
               </div>
+              {priceBreakdown.paidAtHotel > 0 && (
+                <ul className="price-preview__split">
+                  <li className="price-preview__item">
+                    <span className="price-preview__item-label">
+                      Uhradíte v hoteli na mieste
+                    </span>
+                    <span className="price-preview__item-price">
+                      {priceBreakdown.paidAtHotel}&nbsp;€
+                    </span>
+                  </li>
+                  <li className="price-preview__item">
+                    <span className="price-preview__item-label">
+                      Uhradíte prevodom pre EVS
+                    </span>
+                    <span className="price-preview__item-price">
+                      {priceBreakdown.amountDue}&nbsp;€
+                    </span>
+                  </li>
+                </ul>
+              )}
             </>
           )}
         </div>

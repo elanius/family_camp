@@ -165,6 +165,36 @@ test.describe("Summary and submit", () => {
     expect(captured.body!.registrant.email).toBe("jan@example.sk");
   });
 
+  test("the voucher moves the stay to the hotel in the summary", async ({
+    page,
+  }) => {
+    await fillRegistrant(page, { room: "double" });
+    await claimVoucher(page);
+    await page.locator("#reg-extra").fill("20");
+
+    await page.getByRole("button", { name: /Ďalej/ }).click();
+
+    await expect(
+      page.getByText("uhradíte priamo v hoteli na mieste"),
+    ).toBeVisible();
+    // 179 + 20, of which the 179 stay is settled at the hotel.
+    await expect(page.locator(".price-preview__total")).toContainText("199");
+    const split = page.locator(".price-preview__split .price-preview__item");
+    await expect(split.first()).toContainText("179");
+    await expect(split.last()).toContainText("20");
+  });
+
+  test("without a voucher the summary shows no hotel split", async ({
+    page,
+  }) => {
+    await fillRegistrant(page, { room: "double" });
+
+    await page.getByRole("button", { name: /Ďalej/ }).click();
+
+    await expect(page.locator(".price-preview__total")).toContainText("179");
+    await expect(page.locator(".price-preview__split")).toHaveCount(0);
+  });
+
   test("submits the voucher as a top-level claim with billing data", async ({
     page,
   }) => {

@@ -81,7 +81,7 @@ function formatISODate(iso: string): string {
   });
 }
 
-/** The price the registrant was actually asked to pay, falling back to the calculation. */
+/** The amount the registrant was actually asked to transfer, else the calculation. */
 export function effectiveAmount(
   item: RegistrationItem,
   calculatedTotal: number,
@@ -151,6 +151,19 @@ const STATUS_ACTIONS: Record<RegistrationStatus, Action[]> = {
   rejected: [],
 };
 
+/**
+ * Nothing to transfer — a recreation voucher stay without a voluntary
+ * contribution. There is no payment info to send, so a new registration is
+ * accepted straight away; accepting sends the closing e-mail either way.
+ */
+const NO_PAYMENT_ACTIONS: Record<RegistrationStatus, Action[]> = {
+  new: ["accept", "reject"],
+  wait_for_payment: ["payment_received", "reject"],
+  paid: ["accept", "reject"],
+  accepted: [],
+  rejected: [],
+};
+
 const ACTION_LABELS: Record<Action, string> = {
   send_payment_info: "Send Payment Info",
   payment_received: "Payment Received",
@@ -188,17 +201,21 @@ function RegistrationRow({
   // Non-null while the admin is picking the day the payment arrived.
   const [receivedDate, setReceivedDate] = useState<string | null>(null);
 
-  const actions = STATUS_ACTIONS[item.status];
   const reg = item.registrant;
 
   const people = toPeople(item);
   const totalPeople = people.length;
   const voucherCount = people.filter((p) => p.voucher).length;
 
-  const pricing = calculatePrice(people, item.extra_contribution ?? 0);
-  const amount = effectiveAmount(item, pricing.total);
+  const pricing = calculatePrice(
+    people,
+    item.extra_contribution ?? 0,
+    item.recreation_voucher ?? false,
+  );
+  const amount = effectiveAmount(item, pricing.amountDue);
   // The admin may have edited the amount before sending the payment e-mail.
-  const amountOverridden = amount !== pricing.total;
+  const amountOverridden = amount !== pricing.amountDue;
+  const actions = (amount > 0 ? STATUS_ACTIONS : NO_PAYMENT_ACTIONS)[item.status];
 
   async function handleAction(action: Action, paymentDate?: string) {
     if (action === "send_payment_info") {
@@ -300,7 +317,12 @@ function RegistrationRow({
               </span>
               {amountOverridden && (
                 <span className="text-gray-400 line-through" title="Calculated price">
-                  €{pricing.total}
+                  €{pricing.amountDue}
+                </span>
+              )}
+              {pricing.paidAtHotel > 0 && (
+                <span className="text-amber-700" title="Paid at the hotel — recreation voucher">
+                  🏨 €{pricing.paidAtHotel}
                 </span>
               )}
               {voucherCount > 0 && (
@@ -447,19 +469,32 @@ function RegistrationRow({
               )}
             </tbody>
             <tfoot>
+              {pricing.paidAtHotel > 0 && (
+                <tr className="border-t-2 border-gray-200 bg-amber-50">
+                  <td
+                    colSpan={5}
+                    className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
+                  >
+                    🏨 Paid at the hotel (voucher)
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-bold text-amber-700">
+                    €{pricing.paidAtHotel}
+                  </td>
+                </tr>
+              )}
               <tr className="border-t-2 border-gray-200 bg-gray-50">
                 <td
                   colSpan={5}
                   className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
                 >
-                  {amountOverridden ? "Calculated" : "Total"}
+                  {amountOverridden ? "Calculated" : "To transfer"}
                 </td>
                 <td
                   className={`px-4 py-2.5 text-right font-bold ${
                     amountOverridden ? "text-gray-400" : "text-green-800"
                   }`}
                 >
-                  €{pricing.total}
+                  €{pricing.amountDue}
                 </td>
               </tr>
               {amountOverridden && (
