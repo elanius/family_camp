@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import smtplib
 from email.mime.image import MIMEImage
@@ -48,9 +49,21 @@ HTML_CLOSE = """\
 def _smtp_send(mime_message: MIMEMultipart) -> None:
     """Send a pre-built MIME message via the configured SMTP server."""
     settings = get_settings()
-    with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as smtp:
-        smtp.login(settings.smtp_user, settings.smtp_password)
-        smtp.send_message(mime_message)
+    try:
+        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as smtp:
+            smtp.login(settings.smtp_user, settings.smtp_password)
+            smtp.send_message(mime_message)
+    except smtplib.SMTPAuthenticationError:
+        # Fingerprint (never the raw secret) so a mismatched deployed env var can be
+        # diagnosed by comparing against the hash of the known-good local value.
+        digest = hashlib.sha256(settings.smtp_password.encode()).hexdigest()[:12]
+        logger.error(
+            "[email] SMTP auth failed for user=%r password_len=%d password_sha256=%s",
+            settings.smtp_user,
+            len(settings.smtp_password),
+            digest,
+        )
+        raise
 
 
 def _credentials_missing() -> list[str]:
