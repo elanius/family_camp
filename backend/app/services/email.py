@@ -177,12 +177,12 @@ def _payment_paragraphs(hotel_amount: int, transfer_due: int) -> tuple[str, str]
         )
 
     if transfer_due:
-        what = "k úhrade dobrovoľného príspevku" if hotel_amount else "k úhrade"
-        texts.append(f"Informácie {what} vám pošleme v samostatnom e-maily.")
-        htmls.append(f"      <p>Informácie {what} vám pošleme v samostatnom e-maily.</p>")
-    elif hotel_amount:
-        texts.append("Nič ďalšie prevodom neuhrádzate.")
-        htmls.append("      <p>Nič ďalšie prevodom neuhrádzate.</p>")
+        text = (
+            "Ďalšie informácie ohľadom vzdelávania aj pokyny k úhrade Vám pošleme "
+            "v samostatnom e-maili."
+        )
+        texts.append(text)
+        htmls.append(f"      <p>{text}</p>")
 
     return "\n\n".join(texts), "\n".join(htmls)
 
@@ -497,10 +497,14 @@ def _build_sub_attendee_notification_message(
 Dobrý deň, {attendee_name},
 
 potvrdzujeme, že ste prihlásený/á na {EVENT_NAME}.
-Prihlášku podal/a: {registered_by_name}
+Prihlášku poslal/a: {registered_by_name}
 
 Termín: {EVENT_DATES}
 Miesto: {EVENT_PLACE}
+
+Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.
+
+Ďalšie informácie ohľadom vzdelávania aj pokyny k úhrade Vám pošleme v samostatnom e-maili.
 
 {SIGNATURE_TEXT}"""
 
@@ -509,7 +513,7 @@ Miesto: {EVENT_PLACE}
 
       <p>potvrdzujeme, že ste prihlásený/á na <strong>{EVENT_NAME}</strong>.</p>
 
-      <p>Prihlášku podal/a: <strong>{registered_by_name}</strong></p>
+    <p>Prihlášku poslal/a: <strong>{registered_by_name}</strong></p>
 
       <table style="border-collapse: collapse; margin: 1.25rem 0;">
         <tr>
@@ -521,6 +525,10 @@ Miesto: {EVENT_PLACE}
           <td style="padding: 4px 0;"><strong>{EVENT_PLACE}</strong></td>
         </tr>
       </table>
+
+            <p>Začíname v piatok o 16:00 prednáškou, končíme v nedeľu obedom.</p>
+
+            <p>Ďalšie informácie ohľadom vzdelávania aj pokyny k úhrade Vám pošleme v samostatnom e-maili.</p>
 
 {SIGNATURE_HTML}{HTML_CLOSE}"""
 
