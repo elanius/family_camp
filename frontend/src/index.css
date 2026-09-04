@@ -183,11 +183,27 @@ a:hover {
   padding: 4rem 1.5rem 1rem;
 }
 
+.intro__quote {
+  margin: 0;
+}
+
 .intro__text {
   font-family: var(--font-serif);
   font-size: clamp(1.1rem, 2.4vw, 1.3rem);
   line-height: 1.75;
   color: var(--color-heading);
+  text-align: center;
+  font-style: italic;
+}
+
+.intro__citation {
+  display: block;
+  margin-top: 0.85rem;
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  color: var(--color-brass);
   text-align: center;
 }
 

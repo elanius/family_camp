@@ -12,7 +12,7 @@ export const EVENT_SUBTITLE = `${EVENT_NAME} · ${EVENT_VENUE}, ${EVENT_CITY} ·
 
 export const REGISTRATION_DEADLINE = "27. septembra 2026";
 
-export const CONTACT_EMAIL = "lydia@evs.sk";
+export const CONTACT_EMAIL = "vzdelavanie@evs.sk";
 export const CONTACT_PHONE = "0911 798 800";
 export const CONTACT_PHONE_HREF = "+421911798800";
 

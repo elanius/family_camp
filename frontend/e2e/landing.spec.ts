@@ -37,7 +37,7 @@ test.describe("Landing page", () => {
     await expect(
       page.getByText("Do 27. septembra 2026", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("lydia@evs.sk").first()).toBeVisible();
+    await expect(page.getByText("vzdelavanie@evs.sk").first()).toBeVisible();
     await expect(page.getByText("0911 798 800").first()).toBeVisible();
   });
 

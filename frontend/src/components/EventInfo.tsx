@@ -23,11 +23,14 @@ export default function EventInfo() {
     <>
       {/* ── Intro ─────────────────────────────────────────────────── */}
       <section className="intro">
-        <p className="intro__text">
-          Spoločne sa ponoríme do štúdia Biblie, budeme sa modliť, smiať sa,
-          plávať, športovať, oddychovať, utužovať naše priateľstvá a snívať
-          o budúcnosti.
-        </p>
+        <blockquote className="intro__quote">
+          <p className="intro__text">
+            „Napokon, bratia, radujte sa, zdokonaľujte sa, napomínajte sa,
+            rovnako zmýšľajte, nažívajte v pokoji a Boh lásky a pokoja bude
+            s vami.“
+          </p>
+          <cite className="intro__citation">2. list Korintským 13, 11</cite>
+        </blockquote>
       </section>
 
       {/* ── Lecturers ─────────────────────────────────────────────── */}

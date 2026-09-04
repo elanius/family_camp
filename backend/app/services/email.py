@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 EVENT_NAME = "Vzdelávanie EVS 2026"
 EVENT_DATES = "23. – 25. októbra 2026"
 EVENT_PLACE = "Hotel Máj***, Liptovský Ján"
-CONTACT_EMAIL = "lydia@evs.sk"
+CONTACT_EMAIL = "vzdelavanie@evs.sk"
 CONTACT_PHONE = "0911 798 800"
 
 SIGNATURE_TEXT = f"""\
