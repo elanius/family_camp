@@ -20,6 +20,25 @@ export const ACCOMMODATION_NOTE: Record<Accommodation, string> = {
 
 export const ACCOMMODATION_ORDER: Accommodation[] = ["double", "single", "none"];
 
+/** A ZTP card holder pays no local tax, so their stay is 3 € cheaper. */
+export const ZTP_DISCOUNT = 3;
+
+export const ZTP_LABEL = "Vlastník preukazu ZŤP";
+
+export const ZTP_HINT =
+  `Držiteľ preukazu ZŤP neplatí miestnu daň — cena za pobyt sa znižuje ` +
+  `o ${ZTP_DISCOUNT} €.`;
+
+/** Price of one person's package, after the ZTP exemption from the local tax. */
+export function personPrice(
+  accommodation: Accommodation,
+  ztp = false,
+): number {
+  const base = ACCOMMODATION_PRICE[accommodation];
+  // Nothing is booked with "none", so there is no local tax to waive either.
+  return ztp && accommodation !== "none" ? base - ZTP_DISCOUNT : base;
+}
+
 /** Room types that qualify for the employer recreation voucher (2-night stay). */
 export function qualifiesForVoucher(accommodation: Accommodation): boolean {
   return accommodation !== "none";
@@ -29,6 +48,8 @@ export interface PricePerson {
   name: string;
   surname: string;
   accommodation: Accommodation;
+  /** Holder of a ZTP card — exempt from the local tax. */
+  ztp?: boolean;
 }
 
 export interface PriceLineItem {
@@ -58,7 +79,7 @@ export function calculatePrice(
   const items: PriceLineItem[] = people.map((p) => ({
     name: `${p.name} ${p.surname}`.trim(),
     accommodation: p.accommodation,
-    price: ACCOMMODATION_PRICE[p.accommodation],
+    price: personPrice(p.accommodation, p.ztp),
   }));
 
   const accommodationTotal = items.reduce((sum, item) => sum + item.price, 0);

@@ -13,9 +13,9 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 export type RegistrationStatus =
   | "new"
   | "wait_for_payment"
-  | "paid"
   | "accepted"
-  | "rejected";
+  /** Set by the registrant alone, through the public update link. */
+  | "cancelled";
 
 export interface AttendeeData {
   name: string;
@@ -24,6 +24,7 @@ export interface AttendeeData {
   phone?: string;
   email?: string;
   roommate_preference?: string;
+  ztp?: boolean;
 }
 
 export interface RegistrantData {
@@ -34,6 +35,7 @@ export interface RegistrantData {
   is_attendee: boolean;
   accommodation?: Accommodation | null;
   roommate_preference?: string;
+  ztp?: boolean;
 }
 
 export interface VoucherBilling {
@@ -96,6 +98,7 @@ export function toPeople(item: RegistrationItem) {
     surname: string;
     accommodation: Accommodation;
     voucher: boolean;
+    ztp: boolean;
     roommate: string;
   }[] = [];
   const reg = item.registrant;
@@ -106,6 +109,7 @@ export function toPeople(item: RegistrationItem) {
       accommodation: reg.accommodation,
       // The voucher is claimed once, by the person who registered.
       voucher: item.recreation_voucher ?? false,
+      ztp: reg.ztp ?? false,
       roommate: reg.roommate_preference ?? "",
     });
   }
@@ -115,6 +119,7 @@ export function toPeople(item: RegistrationItem) {
       surname: a.surname,
       accommodation: a.accommodation,
       voucher: false,
+      ztp: a.ztp ?? false,
       roommate: a.roommate_preference ?? "",
     });
   }
@@ -126,56 +131,51 @@ export function toPeople(item: RegistrationItem) {
 const STATUS_LABELS: Record<RegistrationStatus, string> = {
   new: "New",
   wait_for_payment: "Wait for Payment",
-  paid: "Paid",
   accepted: "Accepted",
-  rejected: "Rejected",
+  cancelled: "Cancelled",
 };
 
 const STATUS_COLORS: Record<RegistrationStatus, string> = {
   new: "bg-gray-100 text-gray-700",
   wait_for_payment: "bg-yellow-100 text-yellow-800",
-  paid: "bg-blue-100 text-blue-800",
   accepted: "bg-green-100 text-green-800",
-  rejected: "bg-red-100 text-red-700",
+  cancelled: "bg-red-100 text-red-700",
 };
 
 // ── Action buttons per status ────────────────────────────────────────────────
 
-type Action = "send_payment_info" | "payment_received" | "accept" | "reject";
+type Action = "send_payment_info" | "payment_received" | "accept";
 
+/** Recording the payment confirms the registration — there is no separate step. */
 const STATUS_ACTIONS: Record<RegistrationStatus, Action[]> = {
-  new: ["send_payment_info", "reject"],
-  wait_for_payment: ["payment_received", "reject"],
-  paid: ["accept", "reject"],
+  new: ["send_payment_info"],
+  wait_for_payment: ["payment_received"],
   accepted: [],
-  rejected: [],
+  cancelled: [],
 };
 
 /**
  * Nothing to transfer — a recreation voucher stay without a voluntary
- * contribution. There is no payment info to send, so a new registration is
- * accepted straight away; accepting sends the closing e-mail either way.
+ * contribution. No payment can arrive, so a new registration is confirmed
+ * straight away; either route sends the same closing e-mail.
  */
 const NO_PAYMENT_ACTIONS: Record<RegistrationStatus, Action[]> = {
-  new: ["accept", "reject"],
-  wait_for_payment: ["payment_received", "reject"],
-  paid: ["accept", "reject"],
+  new: ["accept"],
+  wait_for_payment: ["payment_received"],
   accepted: [],
-  rejected: [],
+  cancelled: [],
 };
 
 const ACTION_LABELS: Record<Action, string> = {
   send_payment_info: "Send Payment Info",
   payment_received: "Payment Received",
   accept: "Accept",
-  reject: "Reject",
 };
 
 const ACTION_STYLES: Record<Action, string> = {
   send_payment_info: "bg-yellow-500 hover:bg-yellow-600 text-white",
   payment_received: "bg-blue-600 hover:bg-blue-700 text-white",
   accept: "bg-green-600 hover:bg-green-700 text-white",
-  reject: "bg-red-500 hover:bg-red-600 text-white",
 };
 
 // ── RegistrationRow ──────────────────────────────────────────────────────────
@@ -227,15 +227,6 @@ function RegistrationRow({
     if (action === "payment_received" && paymentDate === undefined) {
       setError(null);
       setReceivedDate(todayISO());
-      return;
-    }
-
-    if (
-      action === "reject" &&
-      !window.confirm(
-        `Reject registration for ${item.registrant.name} ${item.registrant.surname}?`,
-      )
-    ) {
       return;
     }
 
@@ -428,6 +419,7 @@ function RegistrationRow({
                 <th className="px-4 py-2 text-left">Accommodation</th>
                 <th className="px-4 py-2 text-left">Roommate</th>
                 <th className="px-4 py-2 text-left">Voucher</th>
+                <th className="px-4 py-2 text-left">ZŤP</th>
                 <th className="px-4 py-2 text-right">Price</th>
               </tr>
             </thead>
@@ -447,6 +439,7 @@ function RegistrationRow({
                   <td className="px-4 py-2 text-xs">
                     {p.voucher ? "🎟 yes" : "—"}
                   </td>
+                  <td className="px-4 py-2 text-xs">{p.ztp ? "yes" : "—"}</td>
                   <td className="px-4 py-2 text-right font-semibold">
                     {pricing.items[idx].price === 0 ? (
                       <span className="text-gray-400">free</span>
@@ -459,7 +452,7 @@ function RegistrationRow({
               {pricing.extraContribution > 0 && (
                 <tr className="text-gray-700 bg-amber-50">
                   <td className="px-4 py-2" />
-                  <td className="px-4 py-2 font-medium" colSpan={4}>
+                  <td className="px-4 py-2 font-medium" colSpan={5}>
                     Voluntary contribution
                   </td>
                   <td className="px-4 py-2 text-right font-semibold">
@@ -472,7 +465,7 @@ function RegistrationRow({
               {pricing.paidAtHotel > 0 && (
                 <tr className="border-t-2 border-gray-200 bg-amber-50">
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
                   >
                     🏨 Paid at the hotel (voucher)
@@ -484,7 +477,7 @@ function RegistrationRow({
               )}
               <tr className="border-t-2 border-gray-200 bg-gray-50">
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
                 >
                   {amountOverridden ? "Calculated" : "To transfer"}
@@ -500,7 +493,7 @@ function RegistrationRow({
               {amountOverridden && (
                 <tr className="bg-gray-50">
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-2.5 text-right text-sm font-semibold text-gray-600"
                   >
                     Sent in payment info

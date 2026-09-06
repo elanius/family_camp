@@ -16,13 +16,18 @@ router = APIRouter(prefix="/api", tags=["full-registration"])
 
 # Statuses in which the public update link no longer works. Payment info carries a
 # fixed amount, so the registration must not change once that e-mail went out.
+# "paid" is a legacy name for what is now "accepted".
 LOCKED_STATUSES = ("wait_for_payment", "paid", "accepted")
+
+# Statuses of a registration the registrant has cancelled. "rejected" is the
+# legacy name, from when an admin could reject one too.
+CANCELLED_STATUSES = ("cancelled", "rejected")
 
 # Matches an active (non-cancelled) registration, for both legacy docs that only
 # have `cancelled` and current docs that have `status`.
 ACTIVE_QUERY = {
     "$or": [
-        {"status": {"$nin": ["rejected"]}},
+        {"status": {"$nin": list(CANCELLED_STATUSES)}},
         {"status": {"$exists": False}, "cancelled": {"$ne": True}},
     ]
 }
@@ -38,13 +43,13 @@ def _attendee_full_names(payload: RegistrationRequest) -> list[str]:
 
 
 def _lock_flags(doc: dict) -> tuple[bool, bool, bool]:
-    """Return (is_paid, is_locked, is_cancelled) for a registration document."""
+    """Return (is_confirmed, is_locked, is_cancelled) for a registration document."""
     doc_status = doc.get("status")
     if doc_status is not None:
         return (
             doc_status in ("paid", "accepted"),
             doc_status in LOCKED_STATUSES,
-            doc_status == "rejected",
+            doc_status in CANCELLED_STATUSES,
         )
     legacy_paid = doc.get("is_paid", False)
     return legacy_paid, legacy_paid, doc.get("cancelled", False)
@@ -231,7 +236,7 @@ async def cancel_registration(token: str) -> dict:
             detail="Registrácia je uzavretá, zrušenie nie je možné.",
         )
 
-    await collection.update_one({"update_token": token}, {"$set": {"status": "rejected"}})
+    await collection.update_one({"update_token": token}, {"$set": {"status": "cancelled"}})
 
     logger.info("Registration cancelled via token for %s.", doc["registrant"]["email"])
     return {"message": "Registrácia bola zrušená."}

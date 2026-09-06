@@ -12,6 +12,8 @@ export interface RegistrantData {
   /** Empty until the registrant picks a package; not used for "just_others". */
   accommodation: "" | Accommodation;
   roommatePreference: string;
+  /** Holder of a ZTP card — exempt from the local tax. */
+  ztp: boolean;
 }
 
 export function emptyRegistrant(): RegistrantData {
@@ -22,6 +24,7 @@ export function emptyRegistrant(): RegistrantData {
     email: "",
     accommodation: "",
     roommatePreference: "",
+    ztp: false,
   };
 }
 
@@ -46,6 +49,7 @@ export function emptyAttendee(): AttendeeData {
     phone: "",
     email: "",
     roommatePreference: "",
+    ztp: false,
   };
 }
 

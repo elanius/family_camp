@@ -365,6 +365,38 @@ a:hover {
   margin-top: 0.75rem;
 }
 
+/* Weekend outline inside the "Termín" card. */
+.program {
+  margin-top: 1rem;
+}
+
+.program__day + .program__day {
+  margin-top: 0.9rem;
+}
+
+.program__day-title {
+  font-weight: 600;
+  color: var(--color-heading);
+}
+
+.program__list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+}
+
+.program__item {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.1rem 0;
+}
+
+.program__time {
+  flex: 0 0 6.5rem;
+  color: var(--color-heading);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Register CTA section ─────────────────────────────────────────────── */
 .register {
   background: var(--color-deep);

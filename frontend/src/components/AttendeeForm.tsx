@@ -4,6 +4,8 @@ import {
   ACCOMMODATION_NOTE,
   ACCOMMODATION_ORDER,
   ACCOMMODATION_PRICE,
+  ZTP_HINT,
+  ZTP_LABEL,
   type Accommodation,
 } from "../utils/pricing";
 
@@ -14,6 +16,8 @@ export interface AttendeeData {
   phone: string;
   email: string;
   roommatePreference: string;
+  /** Holder of a ZTP card — exempt from the local tax. */
+  ztp: boolean;
 }
 
 export interface AttendeeErrors {
@@ -154,6 +158,19 @@ export default function AttendeeForm({
         {errors.accommodation && (
           <p className="form-error">{errors.accommodation}</p>
         )}
+      </div>
+
+      <div className="form-field">
+        <label className="form-checkbox">
+          <input
+            type="checkbox"
+            name="ztp"
+            checked={data.ztp}
+            onChange={(e) => onChange(index, "ztp", e.target.checked)}
+          />
+          <span>{ZTP_LABEL}</span>
+        </label>
+        <p className="form-hint">{ZTP_HINT}</p>
       </div>
 
       {showRoommate && (

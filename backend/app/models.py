@@ -17,7 +17,9 @@ class EmailRegistrationRecord(BaseModel):
 
 PHONE_RE = r"^\+?[0-9\s\-]{9,15}$"
 
-RegistrationStatus = Literal["new", "wait_for_payment", "paid", "accepted", "rejected"]
+# new → wait_for_payment → accepted; "cancelled" is set by the registrant alone,
+# through the public update link.
+RegistrationStatus = Literal["new", "wait_for_payment", "accepted", "cancelled"]
 RegistrationType = Literal["me_and_others", "just_others", "only_me"]
 
 # Accommodation package chosen per attending person.
@@ -34,6 +36,8 @@ class AttendeeData(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     roommate_preference: Optional[str] = None
+    # Holder of a ZTP card — exempt from the local tax, see services/pricing.py.
+    ztp: bool = False
 
     @field_validator("phone")
     @classmethod
@@ -53,6 +57,7 @@ class RegistrantData(BaseModel):
     is_attendee: bool
     accommodation: Optional[Accommodation] = None
     roommate_preference: Optional[str] = None
+    ztp: bool = False
 
     @field_validator("phone")
     @classmethod
@@ -140,6 +145,7 @@ class RegistrationTokenResponse(BaseModel):
     extra_contribution: int = 0
     recreation_voucher: bool = False
     voucher_billing: Optional[VoucherBilling] = None
+    # True once the registration is confirmed (accepted) — the form closes for good.
     is_paid: bool
     cancelled: bool
     # True once payment info was sent – the public update link stops working then.

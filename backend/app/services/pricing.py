@@ -7,6 +7,19 @@ Mirrors `frontend/src/utils/pricing.ts` — the two must stay in sync.
 #   double – twin room, single – single room, none – lectures only.
 ACCOMMODATION_PRICE = {"double": 179, "single": 219, "none": 0}
 
+# A ZTP card holder is exempt from the local tax, so their stay costs 3 € less.
+ZTP_DISCOUNT = 3
+
+
+def person_price(person: dict) -> int:
+    """Price of one person's package, after the ZTP exemption from the local tax."""
+    accommodation = person.get("accommodation")
+    base = ACCOMMODATION_PRICE.get(accommodation, 0)
+    # Nothing is booked with "none", so there is no local tax to waive either.
+    if person.get("ztp") and accommodation != "none":
+        return base - ZTP_DISCOUNT
+    return base
+
 
 def voucher_claimed(doc: dict) -> bool:
     """Top-level voucher flag, falling back to the legacy per-person flags."""
@@ -21,9 +34,9 @@ def accommodation_total(registrant: dict, attendees: list[dict]) -> int:
     """Price of the packages alone, without the voluntary contribution."""
     total = 0
     if registrant.get("is_attendee") and registrant.get("accommodation"):
-        total += ACCOMMODATION_PRICE.get(registrant["accommodation"], 0)
+        total += person_price(registrant)
     for a in attendees:
-        total += ACCOMMODATION_PRICE.get(a.get("accommodation"), 0)
+        total += person_price(a)
     return total
 
 

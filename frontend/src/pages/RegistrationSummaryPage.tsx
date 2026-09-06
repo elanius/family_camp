@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   ACCOMMODATION_LABEL,
+  ZTP_LABEL,
   calculatePrice,
   type Accommodation,
 } from "../utils/pricing";
@@ -19,6 +20,7 @@ interface RegistrantPayload {
   is_attendee: boolean;
   accommodation?: Accommodation;
   roommate_preference?: string;
+  ztp?: boolean;
 }
 
 interface AttendeePayload {
@@ -28,6 +30,7 @@ interface AttendeePayload {
   phone?: string;
   email?: string;
   roommate_preference?: string;
+  ztp?: boolean;
 }
 
 interface VoucherBillingPayload {
@@ -73,12 +76,14 @@ export default function RegistrationSummaryPage() {
     name: string;
     surname: string;
     accommodation: Accommodation;
+    ztp?: boolean;
   }[] = [];
   if (registrant.is_attendee && registrant.accommodation) {
     pricePeople.push({
       name: registrant.name,
       surname: registrant.surname,
       accommodation: registrant.accommodation,
+      ztp: registrant.ztp,
     });
   }
   for (const a of attendees) {
@@ -86,6 +91,7 @@ export default function RegistrationSummaryPage() {
       name: a.name,
       surname: a.surname,
       accommodation: a.accommodation,
+      ztp: a.ztp,
     });
   }
   const priceBreakdown = calculatePrice(
@@ -175,6 +181,12 @@ export default function RegistrationSummaryPage() {
                 </span>
               </div>
             )}
+            {registrant.ztp && (
+              <div className="summary-card__row">
+                <span className="summary-card__label">{ZTP_LABEL}</span>
+                <span className="summary-card__value">Áno</span>
+              </div>
+            )}
             {registrant.roommate_preference && (
               <div className="summary-card__row">
                 <span className="summary-card__label">Spolubývajúci</span>
@@ -209,6 +221,12 @@ export default function RegistrationSummaryPage() {
                     {ACCOMMODATION_LABEL[a.accommodation]}
                   </span>
                 </div>
+                {a.ztp && (
+                  <div className="summary-card__row">
+                    <span className="summary-card__label">{ZTP_LABEL}</span>
+                    <span className="summary-card__value">Áno</span>
+                  </div>
+                )}
                 {a.roommate_preference && (
                   <div className="summary-card__row">
                     <span className="summary-card__label">Spolubývajúci</span>

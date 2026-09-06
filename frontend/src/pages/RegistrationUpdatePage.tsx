@@ -10,6 +10,8 @@ import {
   ACCOMMODATION_NOTE,
   ACCOMMODATION_ORDER,
   ACCOMMODATION_PRICE,
+  ZTP_HINT,
+  ZTP_LABEL,
   calculatePrice,
   qualifiesForVoucher,
   type Accommodation,
@@ -43,6 +45,7 @@ interface LoadedRegistration {
     is_attendee: boolean;
     accommodation?: Accommodation | null;
     roommate_preference?: string | null;
+    ztp?: boolean;
   };
   attendees: Array<{
     name: string;
@@ -51,6 +54,7 @@ interface LoadedRegistration {
     phone?: string | null;
     email?: string | null;
     roommate_preference?: string | null;
+    ztp?: boolean;
   }>;
   note?: string | null;
   extra_contribution?: number;
@@ -62,6 +66,7 @@ interface LoadedRegistration {
     city: string;
     postal_code: string;
   } | null;
+  /** True once the registration is confirmed — it closes for good then. */
   is_paid: boolean;
   cancelled: boolean;
   /** True once payment info was sent — the form is read-only from then on. */
@@ -76,7 +81,7 @@ type LoadState =
   | "loading"
   | "not-found"
   | "payment-sent"
-  | "paid"
+  | "confirmed"
   | "cancelled"
   | "ready";
 type SaveState = "idle" | "saving" | "saved" | "error" | "locked";
@@ -139,7 +144,7 @@ export default function RegistrationUpdatePage() {
           return;
         }
         if (data.is_paid) {
-          setLoadState("paid");
+          setLoadState("confirmed");
           return;
         }
         if (data.locked) {
@@ -156,6 +161,7 @@ export default function RegistrationUpdatePage() {
           email: data.registrant.email,
           accommodation: data.registrant.accommodation ?? "",
           roommatePreference: data.registrant.roommate_preference ?? "",
+          ztp: data.registrant.ztp ?? false,
         });
         setOriginalEmail(data.registrant.email);
         setAttendees(
@@ -166,6 +172,7 @@ export default function RegistrationUpdatePage() {
             phone: a.phone ?? "",
             email: a.email ?? "",
             roommatePreference: a.roommate_preference ?? "",
+            ztp: a.ztp ?? false,
           })),
         );
         setNote(data.note ?? "");
@@ -302,6 +309,7 @@ export default function RegistrationUpdatePage() {
         is_attendee: isAttendee,
         ...(isAttendee && {
           accommodation: registrant.accommodation as Accommodation,
+          ztp: registrant.ztp,
           ...(registrant.roommatePreference.trim() && {
             roommate_preference: registrant.roommatePreference.trim(),
           }),
@@ -313,6 +321,7 @@ export default function RegistrationUpdatePage() {
             name: a.name.trim(),
             surname: a.surname.trim(),
             accommodation: a.accommodation as Accommodation,
+            ztp: a.ztp,
             ...(a.roommatePreference.trim() && {
               roommate_preference: a.roommatePreference.trim(),
             }),
@@ -442,10 +451,10 @@ export default function RegistrationUpdatePage() {
     );
   }
 
-  if (loadState === "paid") {
+  if (loadState === "confirmed") {
     return (
-      <StatusScreen title="Prihláška je uhradená">
-        Po uhradení platby už nie je možné prihlášku meniť. Ak potrebujete zmenu,
+      <StatusScreen title="Prihláška je potvrdená">
+        Potvrdenú prihlášku už nie je možné meniť. Ak potrebujete zmenu,
         kontaktujte nás prosím e-mailom.
       </StatusScreen>
     );
@@ -628,6 +637,20 @@ export default function RegistrationUpdatePage() {
                   )}
                 </div>
 
+                <div className="form-field">
+                  <label className="form-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={registrant.ztp}
+                      onChange={(e) =>
+                        handleRegistrantChange("ztp", e.target.checked)
+                      }
+                    />
+                    <span>{ZTP_LABEL}</span>
+                  </label>
+                  <p className="form-hint">{ZTP_HINT}</p>
+                </div>
+
                 {registrant.accommodation === "double" && (
                   <div className="form-field">
                     <label className="form-label" htmlFor="reg-roommate">
@@ -698,6 +721,17 @@ export default function RegistrationUpdatePage() {
           {/* ── Voluntary contribution ──────────────────── */}
           <section className="reg-form__section">
             <h2 className="reg-form__section-title">Dobrovoľný príspevok</h2>
+            <p className="reg-form__section-note">
+              Cena za pobyt pokrýva priame náklady na ubytovanie a stravu.
+              Budeme veľmi vďační, ak zvážite svoje možnosti a rozhodnete sa
+              prispieť. Príspevky pomáhajú pokryť náklady na stravu, ubytovanie,
+              cestovné pre speakrov a účinkujúcich, ako aj všetko potrebné na
+              prípravu a organizáciu.
+            </p>
+            <p className="reg-form__section-note">
+              Ak to momentálne nejde, netrápte sa – Pán vie, čo každý z nás
+              potrebuje, a postará sa.
+            </p>
             <div className="form-field form-field--narrow">
               <label className="form-label" htmlFor="reg-extra">
                 Suma navyše v €{" "}
@@ -726,7 +760,7 @@ export default function RegistrationUpdatePage() {
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Napr.: prídem až v sobotu ráno, mám bezlepkovú diétu…"
+                placeholder="Napr. intolerancie (strava bude formou bufetových stolov), vek detí…"
               />
             </div>
           </section>

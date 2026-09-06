@@ -24,7 +24,6 @@ from app.services.auth import create_access_token, get_current_admin, verify_pas
 from app.services.email import (
     send_payment_info_email,
     send_payment_received_confirmation,
-    send_registration_accepted_email,
 )
 from app.services.pricing import (
     amount_due,
@@ -43,45 +42,54 @@ FIXED_VARIABLE_SYMBOL = "022026"
 
 # ── State machine ────────────────────────────────────────────────────────
 
+# Recording the payment is what confirms the registration — there is no separate
+# acceptance step, and no way back out: only the registrant cancels, through the
+# public update link.
 _ACTION_REQUIRES: dict[str, tuple[str, ...]] = {
     "send_payment_info": ("new",),
     "payment_received": ("wait_for_payment",),
-    "accept": ("paid",),
-    "reject": ("new", "wait_for_payment", "paid"),
+    "accept": (),
 }
 
 # Nothing to transfer — a recreation voucher stay without a voluntary contribution.
-# The two payment steps fall away and the admin accepts the registration straight
-# from "new". "payment_received" stays reachable so a registration that was already
-# waiting for a payment cannot get stuck.
+# No payment can arrive, so the admin confirms the registration straight from "new".
+# "payment_received" stays reachable so a registration that was already waiting for
+# a payment cannot get stuck.
 _ACTION_REQUIRES_NO_PAYMENT: dict[str, tuple[str, ...]] = {
     "send_payment_info": (),
     "payment_received": ("wait_for_payment",),
-    "accept": ("new", "paid"),
-    "reject": ("new", "wait_for_payment", "paid"),
+    "accept": ("new",),
 }
 
 _ACTION_RESULT: dict[str, RegistrationStatus] = {
     "send_payment_info": "wait_for_payment",
-    "payment_received": "paid",
+    "payment_received": "accepted",
     "accept": "accepted",
-    "reject": "rejected",
 }
 
-AdminAction = Literal["send_payment_info", "payment_received", "accept", "reject"]
+AdminAction = Literal["send_payment_info", "payment_received", "accept"]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
+# Statuses that existed before "paid" was merged into "accepted" and "rejected"
+# was narrowed to the registrant's own cancellation.
+_LEGACY_STATUSES: dict[str, RegistrationStatus] = {
+    "paid": "accepted",
+    "rejected": "cancelled",
+}
+
+
 def _effective_status(doc: dict) -> RegistrationStatus:
-    """Return the registration status, falling back to legacy is_paid/cancelled fields."""
+    """Return the registration status, falling back to legacy fields and names."""
     if "status" in doc:
-        return doc["status"]
+        stored = doc["status"]
+        return _LEGACY_STATUSES.get(stored, stored)
     if doc.get("cancelled", False):
-        return "rejected"
+        return "cancelled"
     if doc.get("is_paid", False):
-        return "paid"
+        return "accepted"
     return "new"
 
 
@@ -203,9 +211,14 @@ async def apply_action(
     allowed_from = requires[action]
 
     if not allowed_from:
+        reason = (
+            "this registration has nothing to pay"
+            if due == 0
+            else "a payment has to be recorded instead"
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Action '{action}' is not available – this registration has nothing to pay.",
+            detail=f"Action '{action}' is not available – {reason}.",
         )
     if current_status not in allowed_from:
         raise HTTPException(
@@ -235,35 +248,25 @@ async def apply_action(
                 to_email=registrant["email"],
                 registrant_name=registrant["name"],
                 attendee_count=len(doc.get("attendees", [])),
+                contribution_only=voucher_claimed(doc),
             )
         except Exception:
             logger.warning("Payment info email failed for %s – status already updated.", registrant["email"])
 
-    if action == "payment_received":
+    if action in ("payment_received", "accept"):
+        # Both routes end in "accepted", and both close with the same e-mail — the
+        # last one the registrant gets. Only "accept" (nothing to transfer) has no
+        # payment to acknowledge in it.
         registrant = doc["registrant"]
-        vs = doc.get("variable_symbol", "–")
         try:
             await send_payment_received_confirmation(
                 to_email=registrant["email"],
                 registrant_name=registrant["name"],
-                variable_symbol=vs,
+                variable_symbol=doc.get("variable_symbol", "–"),
+                payment_made=action == "payment_received",
             )
         except Exception:
-            logger.warning("Payment received email failed for %s – status already updated.", registrant["email"])
-
-    if action == "accept":
-        # Closing e-mail: the registration is final. A voucher stay is settled at
-        # the hotel, so the amount to pay there goes with it.
-        registrant = doc["registrant"]
-        at_hotel = hotel_amount(registrant, doc.get("attendees", []), voucher_claimed(doc))
-        try:
-            await send_registration_accepted_email(
-                to_email=registrant["email"],
-                registrant_name=registrant["name"],
-                hotel_amount=at_hotel,
-            )
-        except Exception:
-            logger.warning("Acceptance email failed for %s – status already updated.", registrant["email"])
+            logger.warning("Confirmation email failed for %s – status already updated.", registrant["email"])
 
     doc.update(changes)
     return _doc_to_item(doc)
@@ -387,6 +390,9 @@ async def send_payment_info_endpoint(
             variable_symbol=body.variable_symbol,
             recipient_note=body.recipient_note,
             qr_png_bytes=qr_bytes,
+            # A voucher stay is settled at the hotel — this transfer is the
+            # voluntary contribution alone, and the e-mail says so.
+            contribution_only=voucher_claimed(doc),
         )
     except Exception:
         logger.warning("Payment info email failed for %s – status already updated.", registrant["email"])

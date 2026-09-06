@@ -10,6 +10,8 @@ import {
   ACCOMMODATION_NOTE,
   ACCOMMODATION_ORDER,
   ACCOMMODATION_PRICE,
+  ZTP_HINT,
+  ZTP_LABEL,
   calculatePrice,
   qualifiesForVoucher,
   type Accommodation,
@@ -86,6 +88,7 @@ export function toPricePeople(
       name: registrant.name || "–",
       surname: registrant.surname || "",
       accommodation: registrant.accommodation,
+      ztp: registrant.ztp,
     });
   }
   if (includeAttendees) {
@@ -95,6 +98,7 @@ export function toPricePeople(
           name: a.name || "–",
           surname: a.surname || "",
           accommodation: a.accommodation,
+          ztp: a.ztp,
         });
       }
     }
@@ -260,6 +264,7 @@ export default function RegistrationFormPage() {
         is_attendee: isAttendee,
         ...(isAttendee && {
           accommodation: registrant.accommodation as Accommodation,
+          ztp: registrant.ztp,
           ...(registrant.roommatePreference.trim() && {
             roommate_preference: registrant.roommatePreference.trim(),
           }),
@@ -271,6 +276,7 @@ export default function RegistrationFormPage() {
             name: a.name.trim(),
             surname: a.surname.trim(),
             accommodation: a.accommodation as Accommodation,
+            ztp: a.ztp,
             ...(a.roommatePreference.trim() && {
               roommate_preference: a.roommatePreference.trim(),
             }),
@@ -504,6 +510,20 @@ export default function RegistrationFormPage() {
                   )}
                 </div>
 
+                <div className="form-field">
+                  <label className="form-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={registrant.ztp}
+                      onChange={(e) =>
+                        handleRegistrantChange("ztp", e.target.checked)
+                      }
+                    />
+                    <span>{ZTP_LABEL}</span>
+                  </label>
+                  <p className="form-hint">{ZTP_HINT}</p>
+                </div>
+
                 {registrant.accommodation === "double" && (
                   <div className="form-field">
                     <label className="form-label" htmlFor="reg-roommate">
@@ -580,9 +600,15 @@ export default function RegistrationFormPage() {
           <section className="reg-form__section">
             <h2 className="reg-form__section-title">Dobrovoľný príspevok</h2>
             <p className="reg-form__section-note">
-              Cena za pobyt pokrýva priame náklady na ubytovanie a stravu. Ak
-              môžete prispieť viac, príspevok použijeme na organizáciu
-              vzdelávania, zaplatenie pobytu iným a na podporu služby EVS.
+              Cena za pobyt pokrýva priame náklady na ubytovanie a stravu.
+              Budeme veľmi vďační, ak zvážite svoje možnosti a rozhodnete sa
+              prispieť. Príspevky pomáhajú pokryť náklady na stravu, ubytovanie,
+              cestovné pre speakrov a účinkujúcich, ako aj všetko potrebné na
+              prípravu a organizáciu.
+            </p>
+            <p className="reg-form__section-note">
+              Ak to momentálne nejde, netrápte sa – Pán vie, čo každý z nás
+              potrebuje, a postará sa.
             </p>
             <div className="form-field form-field--narrow">
               <label className="form-label" htmlFor="reg-extra">
@@ -611,7 +637,7 @@ export default function RegistrationFormPage() {
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Napr.: prídem až v sobotu ráno, mám bezlepkovú diétu, potrebujem izbu na prízemí…"
+                placeholder="Napr. intolerancie (strava bude formou bufetových stolov), vek detí…"
               />
             </div>
           </section>

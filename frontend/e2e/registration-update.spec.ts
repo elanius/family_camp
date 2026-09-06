@@ -87,11 +87,11 @@ test.describe("Update page – loading", () => {
     ).toBeVisible();
   });
 
-  test("locks a registration that is already paid", async ({ page }) => {
+  test("locks a registration that is already confirmed", async ({ page }) => {
     await stubLoad(page, { is_paid: true });
     await page.goto(`/update/${TOKEN}`);
     await expect(
-      page.getByRole("heading", { name: "Prihláška je uhradená" }),
+      page.getByRole("heading", { name: "Prihláška je potvrdená" }),
     ).toBeVisible();
   });
 

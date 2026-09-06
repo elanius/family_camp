@@ -62,6 +62,10 @@ Každý **účastník** si vyberá balík ubytovania a stravy:
 | `single`        | 219 €        | to isté v jednolôžkovej izbe                      |
 | `none`          | 0 €          | účasť len na prednáškach                          |
 
+Držiteľ preukazu **ZŤP** (`ztp` pri každom účastníkovi) neplatí miestnu daň,
+takže jeho pobyt je o 3 € lacnejší (`ZTP_DISCOUNT`); pri `none` sa neodpočítava
+nič, lebo sa nič neubytováva.
+
 Pri každom účastníkovi sa eviduje **preferovaný spolubývajúci** (len pri
 `double`). K celej prihláške patrí voliteľný **dobrovoľný príspevok** v celých
 eurách, ktorý sa pripočíta k výslednej sume.
@@ -164,16 +168,21 @@ Bez `SMTP_HOST`, `SMTP_USER` alebo `SMTP_PASSWORD` sa e-maily preskočia
 | `/admin/attendees`     | Plochá tabuľka účastníkov + export do CSV               |
 | `/admin/payment/:id`   | Platobné údaje, QR kód a odoslanie e-mailu s platbou    |
 
-Stavy prihlášky: `new → wait_for_payment → paid → accepted`, kedykoľvek
-`rejected`. Verejný odkaz na úpravu funguje len v stave `new` — odoslaním
-platobných informácií (`wait_for_payment`) sa prihláška uzavrie, aby sa
-nerozišla s už oznámenou sumou.
+Stavy prihlášky: `new → wait_for_payment → accepted`. Stav `cancelled` nastaví
+len sám prihlasujúci cez verejný odkaz na úpravu — administrátor prihlášku
+zamietnuť nevie. Verejný odkaz funguje len v stave `new` — odoslaním platobných
+informácií (`wait_for_payment`) sa prihláška uzavrie, aby sa nerozišla s už
+oznámenou sumou.
 
-Keď prihláška nemá čo uhrádzať prevodom (poukaz bez príspevku), platobné kroky
-odpadajú: `send_payment_info` sa odmietne a administrátor prihlášku prijme
-rovno z `new` (`new → accepted`). Akcia `accept` v oboch prípadoch odošle
-záverečný e-mail o potvrdení prihlášky — pri poukaze aj so sumou, ktorú
-účastník zaplatí v hoteli.
+Zaznamenanie platby (`payment_received`) prihlášku rovno **potvrdí**
+(`accepted`) a odošle posledný e-mail — potvrdenie s informáciami o pobyte,
+doplnkových službách hotela a programom. Keď prihláška nemá čo uhrádzať prevodom
+(poukaz bez príspevku), platobné kroky odpadajú: `send_payment_info` sa odmietne
+a administrátor prihlášku potvrdí rovno z `new` akciou `accept`, ktorá pošle ten
+istý e-mail, len bez zmienky o prijatej platbe.
+
+Staršie záznamy so stavom `paid` sa čítajú ako `accepted` a `rejected` ako
+`cancelled` (`_LEGACY_STATUSES` v [`backend/app/routers/admin.py`](backend/app/routers/admin.py)).
 
 Pri označení platby ako prijatej vyberá administrátor v kalendári **dátum
 prijatia platby** (predvolene dnešok, spätne ľubovoľný starší deň, budúce dátumy

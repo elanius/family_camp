@@ -10,9 +10,8 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const STATUS_LABELS: Record<RegistrationStatus, string> = {
   new: "New",
   wait_for_payment: "Wait for Payment",
-  paid: "Paid",
   accepted: "Accepted",
-  rejected: "Rejected",
+  cancelled: "Cancelled",
 };
 
 // ── Flattened attendee row ───────────────────────────────────────────────────
@@ -22,6 +21,7 @@ interface AttendeeRow {
   surname: string;
   accommodation: string;
   voucher: string;
+  ztp: string;
   roommate: string;
   // Contact = the registrant of the group this attendee belongs to
   contactName: string;
@@ -39,6 +39,7 @@ type SortKey = keyof Pick<
   | "surname"
   | "accommodation"
   | "voucher"
+  | "ztp"
   | "roommate"
   | "contactName"
   | "contactEmail"
@@ -53,6 +54,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "accommodation", label: "Accommodation" },
   { key: "roommate", label: "Roommate" },
   { key: "voucher", label: "Voucher" },
+  { key: "ztp", label: "ZŤP" },
   { key: "contactName", label: "Contact" },
   { key: "contactEmail", label: "Email" },
   { key: "contactPhone", label: "Phone" },
@@ -66,8 +68,8 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 function toRows(items: RegistrationItem[]): AttendeeRow[] {
   const rows: AttendeeRow[] = [];
   for (const item of items) {
-    // "Who will come" – skip rejected registrations.
-    if (item.status === "rejected") continue;
+    // "Who will come" – skip cancelled registrations.
+    if (item.status === "cancelled") continue;
 
     const reg = item.registrant;
     const contactName = `${reg.name} ${reg.surname}`.trim();
@@ -95,6 +97,7 @@ function toRows(items: RegistrationItem[]): AttendeeRow[] {
         accommodation: ACCOMMODATION_LABEL[p.accommodation],
         roommate: p.roommate,
         voucher: p.voucher ? "Yes" : "",
+        ztp: p.ztp ? "Yes" : "",
         isContact: registrantAttends && idx === 0,
       });
     });
@@ -281,6 +284,7 @@ export default function AttendeeTablePage() {
                     <td className="px-4 py-2 text-gray-500 text-xs">{r.accommodation}</td>
                     <td className="px-4 py-2 text-gray-500 text-xs">{r.roommate}</td>
                     <td className="px-4 py-2 text-xs">{r.voucher}</td>
+                    <td className="px-4 py-2 text-xs">{r.ztp}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{r.contactName}</td>
                     <td className="px-4 py-2">
                       <a href={`mailto:${r.contactEmail}`} className="text-green-700 hover:underline">

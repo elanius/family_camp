@@ -12,14 +12,13 @@ import { calculatePrice } from "../utils/pricing";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
-const ALL_STATUSES: RegistrationStatus[] = ["new", "wait_for_payment", "paid", "accepted", "rejected"];
+const ALL_STATUSES: RegistrationStatus[] = ["new", "wait_for_payment", "accepted", "cancelled"];
 
 const STATUS_LABELS: Record<RegistrationStatus, string> = {
   new: "New",
   wait_for_payment: "Wait for Payment",
-  paid: "Paid",
   accepted: "Accepted",
-  rejected: "Rejected",
+  cancelled: "Cancelled",
 };
 
 export default function AdminPage() {
@@ -75,7 +74,7 @@ export default function AdminPage() {
     let atHotel = 0;
     let vouchers = 0;
     for (const item of items) {
-      if (item.status === "rejected") continue;
+      if (item.status === "cancelled") continue;
       const attending = toPeople(item);
       people += attending.length;
       if (item.recreation_voucher) vouchers += 1;
