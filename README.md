@@ -153,6 +153,7 @@ mockované cez `page.route`.
 | `APP_BASE_URL`     | Verejná URL frontendu — z nej sa skladá odkaz na úpravu prihlášky v e-maile |
 | `EMAIL_ENABLED`    | `false` vypne všetky odchádzajúce e-maily (vývoj)             |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Prihlasovacie údaje SMTP servera        |
+| `ADMIN_NOTIFICATION_EMAILS` | Adresy organizátorov (oddelené `;`), ktorým príde upozornenie na novú prihlášku — prázdne = neposiela sa |
 | `BANK_IBAN`, `BANK_NAME`, `BANK_BENEFICIARY` | Údaje do platobného e-mailu a QR kódu |
 | `JWT_SECRET`       | Podpisovanie admin tokenov                                    |
 

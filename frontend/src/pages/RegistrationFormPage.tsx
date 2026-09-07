@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AttendeeForm, {
   validateAttendee,
   type AttendeeData,
@@ -319,6 +319,9 @@ export default function RegistrationFormPage() {
   return (
     <main className="reg-form-page">
       <div className="reg-form-page__inner">
+        <Link to="/" className="reg-form-page__back">
+          ← Späť na hlavnú stránku
+        </Link>
         <h1 className="reg-form-page__title">Prihláška</h1>
         <p className="reg-form-page__subtitle">{EVENT_SUBTITLE}</p>
 

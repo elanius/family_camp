@@ -51,6 +51,16 @@ HTML_CLOSE = """\
 """
 
 
+def _person_word(count: int) -> str:
+    """Slovak plural of "person" as it follows a number."""
+    return "osoba" if count == 1 else ("osoby" if 1 < count < 5 else "osôb")
+
+
+def _site_url() -> str:
+    """Public address of the event site, for the "main page" links in e-mails."""
+    return get_settings().app_base_url.rstrip("/")
+
+
 def _smtp_send(mime_message: MIMEMultipart) -> None:
     """Send a pre-built MIME message via the configured SMTP server."""
     settings = get_settings()
@@ -218,7 +228,7 @@ def _build_full_registration_message(
     message["To"] = to_email
 
     count = len(attendee_names)
-    person_word = "osoba" if count == 1 else ("osoby" if count > 1 and count < 5 else "osôb")
+    person_word = _person_word(count)
     list_items = "".join(
         f"        <li>{escape(name)}</li>\n" for name in attendee_names
     )
@@ -793,6 +803,8 @@ def _build_payment_received_message(
         "učeníkmi.“"
     )
     verse_ref = "Ján 6, 1-3"
+    site_url = _site_url()
+    site_line = f"Všetky informácie o vzdelávaní nájdete na našej stránke: {site_url}"
 
     services_text = _bullets_text([f"{name} – {detail}" for name, detail in _HOTEL_SERVICES])
     services_html = _bullets_html(
@@ -803,6 +815,8 @@ def _build_payment_received_message(
 Dobrý deň, {registrant_name},
 
 {opening_text}
+
+{site_line}
 
 {binding}
 
@@ -839,6 +853,11 @@ Program Vzdelávania
 {HTML_OPEN}      <p>Dobrý deň, <strong>{registrant_name}</strong>,</p>
 
 {opening_html}
+
+      <p>
+        Všetky informácie o vzdelávaní nájdete na našej stránke:
+        <a href="{site_url}">{site_url}</a>.
+      </p>
 
       <p>{binding}</p>
 
@@ -917,4 +936,61 @@ async def send_payment_received_confirmation(
         logger.info("[email] Final confirmation e-mail sent to %s", to_email)
     except Exception:
         logger.exception("[email] Unexpected error sending final confirmation to %s", to_email)
+        raise
+
+
+# ── Admin notification about a new registration ───────────────────────────
+
+
+def _build_admin_notification_message(
+    sender: str, to_header: str, attendee_names: list[str]
+) -> MIMEMultipart:
+    message = MIMEMultipart("alternative")
+    count = len(attendee_names)
+    message["Subject"] = f"{EVENT_NAME} – nová prihláška ({count} {_person_word(count)})"
+    message["From"] = sender
+    message["To"] = to_header
+
+    text_body = f"""\
+Nová prihláška na {EVENT_NAME}:
+
+""" + "".join(f"- {name}\n" for name in attendee_names)
+
+    list_items = "".join(f"        <li>{escape(name)}</li>\n" for name in attendee_names)
+    html_body = f"""\
+{HTML_OPEN}      <p>Nová prihláška na <strong>{EVENT_NAME}</strong>:</p>
+
+      <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem;">
+{list_items}      </ul>
+{HTML_CLOSE}"""
+
+    message.attach(MIMEText(text_body, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
+    return message
+
+
+def _send_admin_notification_via_smtp(to_header: str, attendee_names: list[str]) -> None:
+    settings = get_settings()
+    _smtp_send(
+        _build_admin_notification_message(settings.smtp_user, to_header, attendee_names)
+    )
+
+
+async def send_admin_new_registration_notification(attendee_names: list[str]) -> None:
+    """Tell the organisers a registration came in — just who signed up.
+
+    Recipients come from ADMIN_NOTIFICATION_EMAILS; with none set nothing is sent.
+    """
+    recipients = get_settings().admin_notification_email_list
+    if not recipients:
+        logger.info("[email] ADMIN_NOTIFICATION_EMAILS not set – skipping admin notification.")
+        return
+
+    to_header = ", ".join(recipients)
+    logger.debug("[email] send_admin_new_registration_notification called for %s", to_header)
+    try:
+        await _dispatch(_send_admin_notification_via_smtp, to_header, attendee_names)
+        logger.info("[email] Admin notification e-mail sent to %s", to_header)
+    except Exception:
+        logger.exception("[email] Unexpected error sending admin notification to %s", to_header)
         raise

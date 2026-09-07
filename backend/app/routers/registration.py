@@ -7,7 +7,11 @@ from pydantic import EmailStr
 from app.config import get_settings
 from app.database import get_db
 from app.models import RegistrationRecord, RegistrationRequest, RegistrationTokenResponse
-from app.services.email import send_full_registration_confirmation, send_sub_attendee_notification
+from app.services.email import (
+    send_admin_new_registration_notification,
+    send_full_registration_confirmation,
+    send_sub_attendee_notification,
+)
 from app.services.pricing import hotel_amount, transfer_amount
 
 logger = logging.getLogger(__name__)
@@ -133,6 +137,12 @@ async def register(payload: RegistrationRequest) -> dict:
                     attendee.name,
                     attendee.surname,
                 )
+
+    # Let the organisers know somebody signed up.
+    try:
+        await send_admin_new_registration_notification(_attendee_full_names(payload))
+    except Exception:
+        logger.warning("Admin notification email failed – continuing.")
 
     return {"message": "Registrácia prebehla úspešne."}
 

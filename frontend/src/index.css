@@ -469,6 +469,19 @@ a:hover {
   margin: 0 auto;
 }
 
+.reg-form-page__back {
+  display: inline-block;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.reg-form-page__back:hover {
+  color: var(--color-brass);
+}
+
 .reg-form-page__title {
   font-family: var(--font-serif);
   font-size: clamp(1.75rem, 4vw, 2.25rem);

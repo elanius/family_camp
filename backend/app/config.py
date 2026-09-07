@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
 
+    # Organisers notified about every new registration, separated by ";".
+    admin_notification_emails: str = ""
+
     # Bank (payment info)
     bank_iban: str = ""
     bank_name: str = ""
@@ -36,6 +39,11 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480
+
+    @property
+    def admin_notification_email_list(self) -> list[str]:
+        """`admin_notification_emails` as a list, empty entries dropped."""
+        return [e.strip() for e in self.admin_notification_emails.split(";") if e.strip()]
 
 
 @lru_cache
