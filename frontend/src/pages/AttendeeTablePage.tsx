@@ -2,8 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../admin.css";
 import { useAdminAuth } from "../context/AdminAuthContext";
-import { toPeople, type RegistrationItem, type RegistrationStatus } from "../components/admin/RegistrationList";
-import { ACCOMMODATION_LABEL } from "../utils/pricing";
+import {
+  effectiveAmount,
+  toPeople,
+  type RegistrationItem,
+  type RegistrationStatus,
+} from "../components/admin/RegistrationList";
+import { ACCOMMODATION_LABEL, calculatePrice } from "../utils/pricing";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -20,6 +25,7 @@ interface AttendeeRow {
   name: string;
   surname: string;
   accommodation: string;
+  /** Invoicing details of the recreation voucher, empty when none is claimed. */
   voucher: string;
   ztp: string;
   roommate: string;
@@ -30,7 +36,10 @@ interface AttendeeRow {
   note: string;
   status: RegistrationStatus;
   groupId: string;
-  isContact: boolean;
+  /** Owed to / collected by EVS. Group-level: only the first row of a group carries it. */
+  amountPaid: number | null;
+  /** Day the payment arrived, "YYYY-MM-DD". Group-level, like `amountPaid`. */
+  paymentDate: string;
 }
 
 type SortKey = keyof Pick<
@@ -46,6 +55,8 @@ type SortKey = keyof Pick<
   | "contactPhone"
   | "note"
   | "status"
+  | "amountPaid"
+  | "paymentDate"
 >;
 
 const COLUMNS: { key: SortKey; label: string }[] = [
@@ -60,9 +71,22 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "contactPhone", label: "Phone" },
   { key: "note", label: "Note" },
   { key: "status", label: "Status" },
+  { key: "amountPaid", label: "Paid to organizer" },
+  { key: "paymentDate", label: "Payment date" },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** The recreation voucher as one line: who the stay is invoiced to. */
+function voucherText(item: RegistrationItem): string {
+  if (!item.recreation_voucher) return "";
+  const b = item.voucher_billing;
+  if (!b) return "Yes";
+  const who = `${b.name} ${b.surname}`.trim();
+  const where = `${b.postal_code} ${b.city}`.trim();
+  // Older registrations may carry a half-filled address; never export a bare comma.
+  return [who, b.address, where].filter(Boolean).join(", ") || "Yes";
+}
 
 /** Flatten registrations into one row per attending person. */
 function toRows(items: RegistrationItem[]): AttendeeRow[] {
@@ -87,7 +111,12 @@ function toRows(items: RegistrationItem[]): AttendeeRow[] {
     // toPeople() puts the registrant first when they attend ("me_and_others",
     // "only_me"); "just_others" registrants don't attend and are skipped.
     const people = toPeople(item);
-    const registrantAttends = reg.is_attendee && !!reg.accommodation;
+    const pricing = calculatePrice(
+      people,
+      item.extra_contribution ?? 0,
+      item.recreation_voucher ?? false,
+    );
+    const amountPaid = effectiveAmount(item, pricing.amountDue);
 
     people.forEach((p, idx) => {
       rows.push({
@@ -96,9 +125,12 @@ function toRows(items: RegistrationItem[]): AttendeeRow[] {
         surname: p.surname,
         accommodation: ACCOMMODATION_LABEL[p.accommodation],
         roommate: p.roommate,
-        voucher: p.voucher ? "Yes" : "",
+        voucher: p.voucher ? voucherText(item) : "",
         ztp: p.ztp ? "Yes" : "",
-        isContact: registrantAttends && idx === 0,
+        // One payment covers the whole group, so it is recorded once, on the
+        // group's first row — the registrant's, whenever they attend.
+        amountPaid: idx === 0 ? amountPaid : null,
+        paymentDate: idx === 0 ? (item.payment_received_at ?? "") : "",
       });
     });
   }
@@ -106,7 +138,21 @@ function toRows(items: RegistrationItem[]): AttendeeRow[] {
 }
 
 function compareRows(a: AttendeeRow, b: AttendeeRow, key: SortKey): number {
-  return String(a[key]).localeCompare(String(b[key]), "sk", { sensitivity: "base" });
+  if (key === "amountPaid") {
+    // Rows with no payment of their own (the rest of a group) sort last.
+    if (a.amountPaid === null || b.amountPaid === null) {
+      return Number(a.amountPaid === null) - Number(b.amountPaid === null);
+    }
+    return a.amountPaid - b.amountPaid;
+  }
+  return String(a[key] ?? "").localeCompare(String(b[key] ?? ""), "sk", { sensitivity: "base" });
+}
+
+/** A row's value as plain text — what the CSV writes, without the display € sign. */
+function cellText(row: AttendeeRow, key: SortKey): string {
+  if (key === "status") return STATUS_LABELS[row.status];
+  if (key === "amountPaid") return row.amountPaid === null ? "" : String(row.amountPaid);
+  return String(row[key] ?? "");
 }
 
 function csvCell(value: string | number): string {
@@ -176,7 +222,7 @@ export default function AttendeeTablePage() {
     const header = COLUMNS.map((c) => c.label);
     const lines = [header.map(csvCell).join(",")];
     for (const r of sortedRows) {
-      lines.push(COLUMNS.map((c) => csvCell(c.key === "status" ? STATUS_LABELS[r.status] : r[c.key])).join(","));
+      lines.push(COLUMNS.map((c) => csvCell(cellText(r, c.key))).join(","));
     }
     // Prepend BOM so Excel reads UTF-8 (Slovak diacritics) correctly.
     const bom = "﻿";
@@ -283,7 +329,11 @@ export default function AttendeeTablePage() {
                     <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">{r.surname}</td>
                     <td className="px-4 py-2 text-gray-500 text-xs">{r.accommodation}</td>
                     <td className="px-4 py-2 text-gray-500 text-xs">{r.roommate}</td>
-                    <td className="px-4 py-2 text-xs">{r.voucher}</td>
+                    <td className="px-4 py-2 text-xs">
+                      <div className="max-w-[14rem] truncate" title={r.voucher}>
+                        {r.voucher}
+                      </div>
+                    </td>
                     <td className="px-4 py-2 text-xs">{r.ztp}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{r.contactName}</td>
                     <td className="px-4 py-2">
@@ -302,6 +352,10 @@ export default function AttendeeTablePage() {
                       </div>
                     </td>
                     <td className="px-4 py-2 text-xs text-gray-500 whitespace-nowrap">{STATUS_LABELS[r.status]}</td>
+                    <td className="px-4 py-2 text-xs whitespace-nowrap">
+                      {r.amountPaid === null ? "" : `€${r.amountPaid}`}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-gray-500 whitespace-nowrap">{r.paymentDate}</td>
                   </tr>
                 ))}
               </tbody>
