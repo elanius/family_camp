@@ -8,7 +8,9 @@ def get_client() -> AsyncIOMotorClient:
     global _client
     if _client is None:
         settings = get_settings()
-        _client = AsyncIOMotorClient(settings.mongodb_uri)
+        # Aware datetimes serialize with a "Z" suffix; a naive one would be
+        # read by the browser as local time and shift every timestamp.
+        _client = AsyncIOMotorClient(settings.mongodb_uri, tz_aware=True)
     return _client
 
 

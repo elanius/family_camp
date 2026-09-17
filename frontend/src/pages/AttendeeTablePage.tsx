@@ -22,6 +22,8 @@ const STATUS_LABELS: Record<RegistrationStatus, string> = {
 // ── Flattened attendee row ───────────────────────────────────────────────────
 
 interface AttendeeRow {
+  /** When the registration was submitted, "YYYY-MM-DD HH:MM:SS" local time. Group-level. */
+  registeredAt: string;
   name: string;
   surname: string;
   accommodation: string;
@@ -44,6 +46,7 @@ interface AttendeeRow {
 
 type SortKey = keyof Pick<
   AttendeeRow,
+  | "registeredAt"
   | "name"
   | "surname"
   | "accommodation"
@@ -60,6 +63,7 @@ type SortKey = keyof Pick<
 >;
 
 const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: "registeredAt", label: "Registered" },
   { key: "name", label: "Name" },
   { key: "surname", label: "Surname" },
   { key: "accommodation", label: "Accommodation" },
@@ -76,6 +80,17 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Local wall-clock time as "YYYY-MM-DD HH:MM:SS", so rows (and the CSV) sort
+ * chronologically as plain text and Excel still recognises it as a date.
+ */
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  // toISOString() prints UTC; shift by the offset to get the admin's own clock.
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 19).replace("T", " ");
+}
 
 /** The recreation voucher as one line: who the stay is invoiced to. */
 function voucherText(item: RegistrationItem): string {
@@ -100,6 +115,7 @@ function toRows(items: RegistrationItem[]): AttendeeRow[] {
     const note = item.note ?? "";
 
     const base = {
+      registeredAt: formatTimestamp(item.registered_at),
       contactName,
       contactEmail: reg.email,
       contactPhone: reg.phone,
@@ -111,11 +127,7 @@ function toRows(items: RegistrationItem[]): AttendeeRow[] {
     // toPeople() puts the registrant first when they attend ("me_and_others",
     // "only_me"); "just_others" registrants don't attend and are skipped.
     const people = toPeople(item);
-    const pricing = calculatePrice(
-      people,
-      item.extra_contribution ?? 0,
-      item.recreation_voucher ?? false,
-    );
+    const pricing = calculatePrice(people, item.extra_contribution ?? 0, item.recreation_voucher ?? false);
     const amountPaid = effectiveAmount(item, pricing.amountDue);
 
     people.forEach((p, idx) => {
@@ -169,7 +181,7 @@ export default function AttendeeTablePage() {
   const [items, setItems] = useState<RegistrationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("surname");
+  const [sortKey, setSortKey] = useState<SortKey>("registeredAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const fetchRegistrations = useCallback(async () => {
@@ -325,6 +337,7 @@ export default function AttendeeTablePage() {
               <tbody className="divide-y divide-gray-100">
                 {sortedRows.map((r, idx) => (
                   <tr key={`${r.groupId}-${idx}`} className="text-gray-700 hover:bg-gray-50 align-top">
+                    <td className="px-4 py-2 text-xs text-gray-500 whitespace-nowrap font-mono">{r.registeredAt}</td>
                     <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">{r.name}</td>
                     <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">{r.surname}</td>
                     <td className="px-4 py-2 text-gray-500 text-xs">{r.accommodation}</td>
