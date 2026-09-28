@@ -149,10 +149,16 @@ a:hover {
   text-decoration: none;
   padding: 0.9rem 2.4rem;
   border-radius: var(--radius);
+  border: none;
   transition: background var(--transition);
 }
 
-.hero__cta:hover {
+.hero__cta:disabled {
+  background: rgba(244 241 234 / 0.25);
+  cursor: not-allowed;
+}
+
+.hero__cta:hover:not(:disabled) {
   background: #8f6931;
   color: #fdfbf7;
 }

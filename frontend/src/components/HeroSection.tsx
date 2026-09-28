@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import {
+  CONTACT_EMAIL,
   EVENT_CITY,
   EVENT_DATES,
   EVENT_NAME,
@@ -24,9 +24,13 @@ export default function HeroSection() {
             {EVENT_VENUE}, {EVENT_CITY}
           </span>
         </div>
-        <Link to="/registration" className="hero__cta">
-          Prihlásiť sa
-        </Link>
+        <button type="button" className="hero__cta" disabled>
+          Registrácia uzavretá
+        </button>
+        <p className="register__note">
+          Ak sa chcete ešte prihlásiť, napíšte nám na{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        </p>
       </div>
     </section>
   );

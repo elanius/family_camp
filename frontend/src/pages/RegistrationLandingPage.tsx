@@ -1,7 +1,6 @@
-import { Link } from "react-router-dom";
 import HeroSection from "../components/HeroSection";
 import EventInfo from "../components/EventInfo";
-import { CONTACT_EMAIL, REGISTRATION_DEADLINE } from "../eventInfo";
+import { CONTACT_EMAIL } from "../eventInfo";
 
 export default function RegistrationLandingPage() {
   return (
@@ -12,17 +11,13 @@ export default function RegistrationLandingPage() {
         <div className="register__inner">
           <h2 className="register__heading">Prihláška</h2>
           <p className="register__description">
-            Prihlásiť sa môžete do {REGISTRATION_DEADLINE}. V prihláške uveďte
-            mená všetkých prihlásených a o čo máte záujem. Prihlášku vám spätne
-            potvrdíme e-mailom.
+            Registrácia je uzavretá.
           </p>
-          <Link to="/registration" className="register__button">
+          <button type="button" className="register__button" disabled>
             Vyplniť prihlášku
-          </Link>
+          </button>
           <p className="register__note">
-            Prihláste sa, aj keď nemáte záujem o stravu či ubytovanie a plánujete
-            prísť iba na vzdelávanie. Ak sa nestihnete prihlásiť v termíne,
-            napíšte nám na{" "}
+            Ak sa chcete ešte prihlásiť, napíšte nám na{" "}
             <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
           </p>
         </div>

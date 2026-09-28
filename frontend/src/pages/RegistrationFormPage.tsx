@@ -29,7 +29,7 @@ import {
   type RegistrationType,
   type VoucherBilling,
 } from "../context/RegistrationContext";
-import { EVENT_SUBTITLE } from "../eventInfo";
+import { CONTACT_EMAIL, EVENT_SUBTITLE } from "../eventInfo";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -324,6 +324,10 @@ export default function RegistrationFormPage() {
         </Link>
         <h1 className="reg-form-page__title">Prihláška</h1>
         <p className="reg-form-page__subtitle">{EVENT_SUBTITLE}</p>
+        <p className="reg-form__submit-warning">
+          Registrácia je uzavretá. Ak sa chcete ešte prihlásiť, napíšte nám na{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        </p>
 
         <form onSubmit={handleNext} noValidate className="reg-form">
           {/* ── Mode selector ───────────────────────────── */}
@@ -679,7 +683,7 @@ export default function RegistrationFormPage() {
           )}
 
           {/* ── Next ────────────────────────────────────── */}
-          <button type="submit" className="reg-form__submit">
+          <button type="submit" className="reg-form__submit" disabled>
             Ďalej →
           </button>
         </form>
